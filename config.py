@@ -1,9 +1,14 @@
 import os
 import json
 import base64
-from dotenv import load_dotenv
 
-load_dotenv()
+# Try to import and load dotenv, but don't fail if it's not available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # dotenv not available, continue without it (environment variables will still work)
+    pass
 
 # Handle Google credentials for cloud deployment
 def get_google_credentials():
