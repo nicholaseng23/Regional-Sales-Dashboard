@@ -40,6 +40,30 @@ st.markdown("""
         color: var(--primary-text);
         font-family: 'Poppins', sans-serif;
     }
+    
+    /* Fix Streamlit default white backgrounds */
+    .main .block-container {
+        background-color: var(--bg-color);
+        color: var(--primary-text);
+    }
+    
+    /* Fix sidebar styling */
+    .css-1d391kg {
+        background-color: var(--card-color);
+    }
+    
+    /* Fix button styling */
+    .stButton > button {
+        background-color: var(--card-color);
+        color: var(--primary-text);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+    }
+    
+    .stButton > button:hover {
+        background-color: var(--border-color);
+        color: var(--primary-text);
+    }
 
     /* Headers */
     .main-header {
@@ -148,6 +172,7 @@ st.markdown("""
         border-bottom: 2px solid var(--border-color);
         flex-wrap: wrap;
         justify-content: flex-start;
+        background-color: var(--bg-color);
     }
     .stTabs [data-baseweb="tab"] {
         background-color: transparent;
@@ -164,18 +189,71 @@ st.markdown("""
     }
     .stTabs [data-baseweb="tab"]:hover {
         color: var(--primary-text);
+        background-color: var(--card-color);
     }
     .stTabs [aria-selected="true"] {
         color: var(--primary-text);
         background-color: var(--card-color);
         border-bottom: 2px solid var(--accent-color);
     }
+    
+    /* Tab content area */
+    .stTabs [data-baseweb="tab-panel"] {
+        background-color: var(--bg-color);
+        color: var(--primary-text);
+    }
 
     /* Dataframe styling */
     .stDataFrame {
         border: 1px solid var(--border-color);
         border-radius: 12px;
-        overflow: hidden; /* Ensures border-radius is respected by contents */
+        overflow: hidden;
+        background-color: var(--card-color);
+    }
+    
+    /* Fix dataframe header and cell colors */
+    .stDataFrame [data-testid="stDataFrameResizable"] {
+        background-color: var(--card-color);
+        color: var(--primary-text);
+    }
+    
+    .stDataFrame table {
+        background-color: var(--card-color);
+        color: var(--primary-text);
+    }
+    
+    .stDataFrame th {
+        background-color: var(--border-color);
+        color: var(--primary-text);
+    }
+    
+    .stDataFrame td {
+        background-color: var(--card-color);
+        color: var(--primary-text);
+    }
+    
+    /* Fix metric containers */
+    .metric-container {
+        background-color: var(--card-color);
+        color: var(--primary-text);
+    }
+    
+    /* Fix any remaining white backgrounds */
+    .element-container, .stMarkdown, .stText {
+        background-color: transparent;
+        color: var(--primary-text);
+    }
+    
+    /* Fix warning and info boxes */
+    .stAlert {
+        background-color: var(--card-color);
+        border: 1px solid var(--border-color);
+        color: var(--primary-text);
+    }
+    
+    /* Fix spinner */
+    .stSpinner {
+        color: var(--accent-color);
     }
     
     /* Responsive design for smaller screens */
