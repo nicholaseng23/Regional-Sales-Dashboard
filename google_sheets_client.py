@@ -1,22 +1,35 @@
 import gspread
+import json
+import os
+import re
+import time
+import logging
 from google.oauth2.service_account import Credentials
 import pandas as pd
-import streamlit as st
-from config import GOOGLE_SHEETS_CONFIG
-import logging
-import time
-import re
 from datetime import datetime, timedelta
-import os
-import json
+
+# Handle streamlit import gracefully for cloud deployment
+try:
+    import streamlit as st
+except ImportError:
+    st = None
+
+# Handle config import gracefully
+try:
+    from config import GOOGLE_SHEETS_CONFIG
+except ImportError:
+    # Fallback configuration for cloud deployment
+    GOOGLE_SHEETS_CONFIG = {
+        'sheets': {}
+    }
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Cache configuration
-CACHE_DURATION = 3600  # Increased from 14400 to 3600 (1 hour cache)
-REQUEST_DELAY = 4.0  # Increased from 2.0 to 4.0 seconds between requests to prevent rate limiting
-MAX_RETRIES = 2  # Reduced from 3 to 2 to fail faster
+CACHE_DURATION = 3600  # 1 hour cache
+REQUEST_DELAY = 4.0  # 4 seconds between requests to prevent rate limiting
+MAX_RETRIES = 2  # Reduced to fail faster
 
 class GoogleSheetsClient:
     def __init__(self):
