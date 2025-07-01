@@ -7,6 +7,12 @@ from data_processor import DataProcessor
 from scheduler import start_background_scheduler
 from config import DASHBOARD_CONFIG, GOOGLE_SHEETS_CONFIG
 import logging
+import os
+
+# Set additional environment variables for Streamlit
+os.environ.setdefault('STREAMLIT_SERVER_ENABLE_STATIC_SERVING', 'true')
+os.environ.setdefault('STREAMLIT_SERVER_ENABLE_CORS', 'false')
+os.environ.setdefault('STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION', 'false')
 
 # --- Page Configuration & Styling ---
 st.set_page_config(

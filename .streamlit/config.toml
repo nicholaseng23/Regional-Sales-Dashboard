@@ -3,9 +3,27 @@ headless = true
 enableCORS = false
 enableXsrfProtection = false
 port = 8501
+maxUploadSize = 200
+maxMessageSize = 200
+enableStaticServing = true
+allowRunOnSave = false
 
 [browser]
 gatherUsageStats = false
+serverAddress = "0.0.0.0"
 
 [theme]
-base = "light" 
+base = "light"
+
+[client]
+caching = true
+displayEnabled = true
+showErrorDetails = true
+
+[runner]
+magicEnabled = true
+installTracer = false
+fixMatplotlib = true
+
+[logger]
+level = "info" 
