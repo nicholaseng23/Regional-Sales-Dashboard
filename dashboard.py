@@ -419,17 +419,79 @@ st.markdown("""
         background-color: var(--card-color) !important;
     }
     
-    /* Specific fix for success messages and alerts */
-    [data-testid="stAlert"] {
+    /* Additional targeted fixes for remaining white backgrounds */
+    
+    /* Fix Streamlit's newer table components */
+    .stDataFrame [data-testid="stDataFrameContainer"],
+    .stDataFrame [data-testid="dataframe"],
+    .stDataFrame .dataframe-container,
+    .stDataFrame .styledTable {
         background-color: var(--card-color) !important;
-        border: 1px solid var(--accent-color) !important;
         color: var(--primary-text) !important;
     }
     
-    [data-testid="stAlert"] > div {
-        background-color: transparent !important;
+    /* Fix any remaining table cell backgrounds */
+    .stDataFrame tbody tr,
+    .stDataFrame tbody td,
+    .stDataFrame tbody th {
+        background-color: var(--card-color) !important;
         color: var(--primary-text) !important;
     }
+    
+    .stDataFrame thead tr,
+    .stDataFrame thead td,
+    .stDataFrame thead th {
+        background-color: var(--border-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Fix success/info message backgrounds */
+    .stAlert[data-baseweb="toast"],
+    .stSuccess[data-baseweb="toast"],
+    .stInfo[data-baseweb="toast"],
+    .stWarning[data-baseweb="toast"] {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+        border: 1px solid var(--accent-color) !important;
+    }
+    
+    /* Fix any modal or overlay backgrounds */
+    .stModal, .stOverlay, .stPopover {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Fix input and form backgrounds */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div > div,
+    .stNumberInput > div > div > input {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+        border: 1px solid var(--border-color) !important;
+    }
+    
+    /* Fix any remaining white containers using CSS Grid/Flexbox */
+    .css-1y4p8pa, .css-12oz5g7, .css-1kyxreq {
+        background-color: transparent !important;
+    }
+    
+    /* Target specific white background divs more precisely */
+    div[style*="background-color: white"],
+    div[style*="background-color: #fff"],
+    div[style*="background-color: #ffffff"],
+    div[style*="background: white"],
+    div[style*="background: #fff"],
+    div[style*="background: #ffffff"] {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Fix any canvas or chart backgrounds */
+    canvas, svg {
+        background-color: transparent !important;
+    }
+    
+    /* Essential CSS restored */
     
     /* Fix metric containers */
     .metric-container {
@@ -450,12 +512,24 @@ st.markdown("""
         color: var(--primary-text);
     }
     
+    /* Specific fix for success messages and alerts */
+    [data-testid="stAlert"] {
+        background-color: var(--card-color) !important;
+        border: 1px solid var(--accent-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    [data-testid="stAlert"] > div {
+        background-color: transparent !important;
+        color: var(--primary-text) !important;
+    }
+    
     /* Fix spinner */
     .stSpinner {
         color: var(--accent-color);
     }
     
-    /* Global overrides for any remaining white backgrounds */
+    /* Scrollbar styling */
     * {
         scrollbar-width: thin;
         scrollbar-color: var(--border-color) var(--card-color);
@@ -480,7 +554,7 @@ st.markdown("""
         color: var(--primary-text) !important;
     }
     
-    /* Fix any remaining white divs */
+    /* Fix any remaining white divs (but not our custom cards) */
     div:not([class*="month-card"]):not([class*="kpi-card"]) {
         background-color: transparent !important;
     }
