@@ -585,6 +585,154 @@ st.markdown("""
             gap: 0.25rem;
         }
     }
+    
+    /* AGGRESSIVE WHITE BACKGROUND FIXES */
+    
+    /* Override ALL possible white backgrounds */
+    *[style*="background-color: white"] {
+        background-color: var(--card-color) !important;
+    }
+    
+    *[style*="background-color: #ffffff"] {
+        background-color: var(--card-color) !important;
+    }
+    
+    *[style*="background-color: #FFFFFF"] {
+        background-color: var(--card-color) !important;
+    }
+    
+    *[style*="background-color: rgb(255, 255, 255)"] {
+        background-color: var(--card-color) !important;
+    }
+    
+    *[style*="background: white"] {
+        background-color: var(--card-color) !important;
+    }
+    
+    *[style*="background: #ffffff"] {
+        background-color: var(--card-color) !important;
+    }
+    
+    *[style*="background: #FFFFFF"] {
+        background-color: var(--card-color) !important;
+    }
+    
+    /* Target all possible Streamlit table selectors */
+    .stDataFrame,
+    .stDataFrame *,
+    [data-testid="stDataFrame"],
+    [data-testid="stDataFrame"] *,
+    .dataframe,
+    .dataframe *,
+    table,
+    table *,
+    thead,
+    thead *,
+    tbody,
+    tbody *,
+    tr,
+    tr *,
+    th,
+    th *,
+    td,
+    td * {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Specifically target table headers */
+    th,
+    thead th,
+    .stDataFrame th,
+    [data-testid="stDataFrame"] th {
+        background-color: var(--border-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Target all alert and message components */
+    .stAlert,
+    .stAlert *,
+    .stSuccess,
+    .stSuccess *,
+    .stInfo,
+    .stInfo *,
+    .stWarning,
+    .stWarning *,
+    .stError,
+    .stError *,
+    [data-testid="stAlert"],
+    [data-testid="stAlert"] *,
+    [data-testid="stSuccess"],
+    [data-testid="stSuccess"] *,
+    [data-testid="stInfo"],
+    [data-testid="stInfo"] *,
+    [data-testid="stWarning"],
+    [data-testid="stWarning"] *,
+    [data-testid="stError"],
+    [data-testid="stError"] * {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+        border-color: var(--accent-color) !important;
+    }
+    
+    /* Target all possible div containers */
+    div {
+        background-color: var(--bg-color) !important;
+    }
+    
+    /* But restore our custom cards */
+    .month-card,
+    .month-card *,
+    .kpi-card,
+    .kpi-card * {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Nuclear option: force all elements to use dark colors */
+    * {
+        background-color: var(--bg-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Restore specific component backgrounds */
+    .month-card {
+        background-color: var(--card-color) !important;
+    }
+    
+    .kpi-card {
+        background-color: var(--card-color) !important;
+    }
+    
+    .stDataFrame,
+    [data-testid="stDataFrame"],
+    table {
+        background-color: var(--card-color) !important;
+    }
+    
+    /* Ensure buttons remain functional */
+    button,
+    .stButton button {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+        border: 1px solid var(--border-color) !important;
+    }
+    
+    button:hover,
+    .stButton button:hover {
+        background-color: var(--border-color) !important;
+    }
+    
+    /* Ensure tabs remain functional */
+    .stTabs [data-baseweb="tab"] {
+        background-color: transparent !important;
+        color: var(--secondary-text) !important;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
