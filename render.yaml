@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: regional-sales-dashboard
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run dashboard.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false
+    healthCheckPath: /
+    envVars:
+      - key: PYTHONPATH
+        value: .
+      - key: STREAMLIT_SERVER_PORT
+        value: $PORT
+      - key: STREAMLIT_SERVER_ADDRESS
+        value: 0.0.0.0
+      - key: STREAMLIT_SERVER_HEADLESS
+        value: true
+      - key: STREAMLIT_SERVER_ENABLE_CORS
+        value: false
+      - key: STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION
+        value: false
+      # Google Sheets API credentials - you'll need to add these in Render dashboard
+      - key: GOOGLE_SHEETS_CREDENTIALS
+        sync: false  # This will be set manually in Render dashboard
+      - key: GOOGLE_SHEETS_TOKEN
+        sync: false  # This will be set manually in Render dashboard
+    disk:
+      name: data
+      mountPath: /opt/render/project/src/cache
+      sizeGB: 1 

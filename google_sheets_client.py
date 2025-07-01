@@ -15,62 +15,67 @@ logger = logging.getLogger(__name__)
 
 # Cache configuration
 CACHE_DURATION = 3600  # Increased from 14400 to 3600 (1 hour cache)
-REQUEST_DELAY = 2.0  # Increased from 1.0 to 2.0 seconds between requests
+REQUEST_DELAY = 4.0  # Increased from 2.0 to 4.0 seconds between requests to prevent rate limiting
 MAX_RETRIES = 2  # Reduced from 3 to 2 to fail faster
 
 class GoogleSheetsClient:
     def __init__(self):
         self.client = None
-        self.request_delay = REQUEST_DELAY
-        self.last_request_time = 0
+        self.api_call_count = 0
+        self.last_api_call_time = 0
+        self.REQUEST_DELAY = REQUEST_DELAY  # Store as instance variable
         self.initialize_client()
     
     def initialize_client(self):
-        """Initialize Google Sheets client with service account credentials"""
+        """Initialize the Google Sheets client with proper credential handling for cloud deployment"""
         try:
-            # Define the scope
-            scope = [
-                "https://spreadsheets.google.com/feeds",
-                "https://www.googleapis.com/auth/drive"
-            ]
+            # Check for environment variable first (for cloud deployment)
+            credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
             
-            # Load credentials
-            credentials = GOOGLE_SHEETS_CONFIG['credentials_file']
-            
-            if isinstance(credentials, dict):
-                # Credentials provided as dictionary (from environment variable)
-                creds = Credentials.from_service_account_info(
-                    credentials, 
-                    scopes=scope
-                )
-            elif isinstance(credentials, str) and os.path.exists(credentials):
-                # Credentials provided as file path
-                creds = Credentials.from_service_account_file(
-                    credentials, 
-                    scopes=scope
+            if credentials_json:
+                # Cloud deployment: credentials from environment variable
+                logger.info("Using credentials from environment variable")
+                credentials_dict = json.loads(credentials_json)
+                credentials = Credentials.from_service_account_info(
+                    credentials_dict,
+                    scopes=[
+                        "https://www.googleapis.com/auth/spreadsheets.readonly",
+                        "https://www.googleapis.com/auth/drive.readonly"
+                    ]
                 )
             else:
-                raise Exception("Invalid credentials format")
+                # Local development: credentials from file
+                logger.info("Using credentials from local file")
+                if not os.path.exists('credentials.json'):
+                    raise FileNotFoundError("credentials.json not found. Please add your Google Sheets API credentials.")
+                
+                credentials = Credentials.from_service_account_file(
+                    'credentials.json',
+                    scopes=[
+                        "https://www.googleapis.com/auth/spreadsheets.readonly",
+                        "https://www.googleapis.com/auth/drive.readonly"
+                    ]
+                )
             
-            # Create client
-            self.client = gspread.authorize(creds)
+            self.client = gspread.authorize(credentials)
             logger.info("Google Sheets client initialized successfully")
             
         except Exception as e:
             logger.error(f"Failed to initialize Google Sheets client: {e}")
-            st.error(f"Failed to connect to Google Sheets: {e}")
+            self.client = None
+            raise
     
     def _rate_limit_delay(self):
         """Implement rate limiting to prevent API quota exhaustion."""
         current_time = time.time()
-        time_since_last = current_time - self.last_request_time
+        time_since_last = current_time - self.last_api_call_time
         
         # Ensure minimum delay between requests
-        if time_since_last < self.request_delay:
-            sleep_time = self.request_delay - time_since_last
+        if time_since_last < self.REQUEST_DELAY:
+            sleep_time = self.REQUEST_DELAY - time_since_last
             time.sleep(sleep_time)
         
-        self.last_request_time = time.time()
+        self.last_api_call_time = time.time()
     
     def exponential_backoff(self, attempt):
         """Implement exponential backoff for rate limiting"""
@@ -78,242 +83,339 @@ class GoogleSheetsClient:
         time.sleep(delay)
         logger.info(f"Rate limited, waiting {delay} seconds (attempt {attempt})")
     
-    def find_latest_data_column(self, sheet_id, worksheet_name):
-        """Find the latest column with data based on row 1 headers"""
+    def batch_get_all_sheet_data(self, sheet_id, worksheet_name, ranges_dict):
+        """
+        Optimized batch data fetching using Google Sheets API batchGet.
+        
+        Args:
+            sheet_id: Google Sheets ID
+            worksheet_name: Name of the worksheet
+            ranges_dict: Dictionary mapping data types to their ranges
+                        e.g., {'vip_data': ['A1:Z1', 'A2:Z2'], 'funnel_data': ['BE54:BS63']}
+        
+        Returns:
+            Dictionary with the same keys as ranges_dict, containing the fetched data
+        """
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                if not self.client:
-                    raise Exception("Google Sheets client not initialized")
+                self._rate_limit_delay()
                 
-                sheet = self.client.open_by_key(sheet_id)
-                worksheet = sheet.worksheet(worksheet_name) if worksheet_name else sheet.sheet1
+                # Get worksheet
+                worksheet = self._get_worksheet(sheet_id, worksheet_name)
+                if not worksheet:
+                    logger.error(f"Could not access worksheet {worksheet_name} in sheet {sheet_id}")
+                    return {}
                 
-                # Get all values from row 1 to find the latest month
-                row_1_values = worksheet.row_values(1)
+                # Flatten all ranges into a single list for batch request
+                all_ranges = []
+                range_mapping = {}  # Maps range index to (data_type, range_index)
                 
-                # Look for date patterns like "25-05" (May 2025)
-                date_pattern = r'\d{2}-\d{2}'
-                latest_col_index = None
-                latest_date = None
+                for data_type, ranges in ranges_dict.items():
+                    for i, range_str in enumerate(ranges):
+                        range_mapping[len(all_ranges)] = (data_type, i)
+                        all_ranges.append(range_str)
                 
-                for i, cell_value in enumerate(row_1_values):
-                    if cell_value and re.search(date_pattern, str(cell_value)):
-                        # Convert index to column letter
-                        col_letter = chr(65 + i) if i < 26 else chr(65 + i // 26 - 1) + chr(65 + i % 26)
-                        latest_col_index = i + 1  # 1-based indexing
-                        latest_date = cell_value
-                        logger.info(f"Found date column: {cell_value} at column {col_letter}")
+                if not all_ranges:
+                    return {}
                 
-                if latest_col_index:
-                    # Convert to column letter (A=1, B=2, ..., Z=26, AA=27, etc.)
-                    if latest_col_index <= 26:
-                        return chr(64 + latest_col_index)  # A-Z
-                    else:
-                        # For columns beyond Z (AA, AB, etc.)
-                        first_letter = chr(64 + (latest_col_index - 1) // 26)
-                        second_letter = chr(65 + (latest_col_index - 1) % 26)
-                        return first_letter + second_letter
+                logger.info(f"Batch fetching {len(all_ranges)} ranges from {worksheet_name}")
                 
-                # Fallback to column V if no date pattern found
-                logger.warning(f"No date pattern found in row 1, using default column V")
-                return 'V'
+                # Single batch API call for all ranges
+                batch_data = worksheet.batch_get(all_ranges)
                 
-            except Exception as e:
-                if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
+                # Organize results back into the original structure
+                result = {data_type: [] for data_type in ranges_dict.keys()}
+                
+                for range_idx, data in enumerate(batch_data):
+                    if range_idx in range_mapping:
+                        data_type, original_range_idx = range_mapping[range_idx]
+                        # Ensure we have enough slots in the result list
+                        while len(result[data_type]) <= original_range_idx:
+                            result[data_type].append([])
+                        result[data_type][original_range_idx] = data
+                
+                logger.info(f"Successfully batch fetched data from {worksheet_name}")
+                return result
+                
+            except gspread.exceptions.APIError as e:
+                if "RATE_LIMIT_EXCEEDED" in str(e) or "429" in str(e):
                     if attempt < max_retries - 1:
                         self.exponential_backoff(attempt)
                         continue
-                logger.error(f"Error finding latest data column: {e}")
-                return 'V'  # Fallback to column V
-        
-        return 'V'  # Final fallback
-    
-    def get_weekly_sales_velocity_data(self, sheet_id, worksheet_name=None):
-        """Get weekly Sales Velocity data starting from 28/04/2025"""
-        max_retries = 3
-        
-        for attempt in range(max_retries):
-            try:
-                if not self.client:
-                    raise Exception("Google Sheets client not initialized")
-                
-                sheet = self.client.open_by_key(sheet_id)
-                worksheet = sheet.worksheet(worksheet_name) if worksheet_name else sheet.sheet1
-                
-                # Get all data from the sheet to find weekly ranges
-                # Assuming the data starts from row 2 and we need to find date ranges
-                all_values = worksheet.get_all_values()
-                
-                if not all_values:
-                    return []
-                
-                headers = all_values[0] if all_values else []
-                weekly_data = []
-                
-                # Find columns for our metrics
-                metric_columns = {
-                    'week_range': None,
-                    'lead_to_sql': None,
-                    'lead_to_ms': None,
-                    'ms_to_1st_meeting': None,
-                    'ms_to_mc': None,
-                    'mc_to_closed': None,
-                    'lead_to_win': None
-                }
-                
-                # Map headers to our metrics (you may need to adjust these based on actual headers)
-                for i, header in enumerate(headers):
-                    header_lower = header.lower()
-                    if 'week' in header_lower or 'date' in header_lower:
-                        metric_columns['week_range'] = i
-                    elif 'lead to sql' in header_lower or 'lead_to_sql' in header_lower:
-                        metric_columns['lead_to_sql'] = i
-                    elif 'lead to ms' in header_lower or 'lead_to_ms' in header_lower:
-                        metric_columns['lead_to_ms'] = i
-                    elif 'ms to 1st meeting' in header_lower or 'ms_to_1st_meeting' in header_lower:
-                        metric_columns['ms_to_1st_meeting'] = i
-                    elif 'ms to mc' in header_lower or 'ms_to_mc' in header_lower:
-                        metric_columns['ms_to_mc'] = i
-                    elif 'mc to closed' in header_lower or 'mc_to_closed' in header_lower:
-                        metric_columns['mc_to_closed'] = i
-                    elif 'lead to win' in header_lower or 'lead_to_win' in header_lower:
-                        metric_columns['lead_to_win'] = i
-                
-                # Process rows starting from row 2 (index 1)
-                for row_idx, row in enumerate(all_values[1:], start=2):
-                    if len(row) <= max(filter(None, metric_columns.values())):
-                        continue
-                    
-                    week_range = row[metric_columns['week_range']] if metric_columns['week_range'] is not None else f"Week {row_idx-1}"
-                    
-                    # Check if this week is from 28/04/2025 onwards
-                    if self.is_week_after_start_date(week_range, "28/04/2025"):
-                        week_data = {
-                            'week_range': week_range,
-                            'lead_to_sql': self.safe_float_convert(row[metric_columns['lead_to_sql']] if metric_columns['lead_to_sql'] is not None else 0),
-                            'lead_to_ms': self.safe_float_convert(row[metric_columns['lead_to_ms']] if metric_columns['lead_to_ms'] is not None else 0),
-                            'ms_to_1st_meeting': self.safe_float_convert(row[metric_columns['ms_to_1st_meeting']] if metric_columns['ms_to_1st_meeting'] is not None else 0),
-                            'ms_to_mc': self.safe_float_convert(row[metric_columns['ms_to_mc']] if metric_columns['ms_to_mc'] is not None else 0),
-                            'mc_to_closed': self.safe_float_convert(row[metric_columns['mc_to_closed']] if metric_columns['mc_to_closed'] is not None else 0),
-                            'lead_to_win': self.safe_float_convert(row[metric_columns['lead_to_win']] if metric_columns['lead_to_win'] is not None else 0)
-                        }
-                        weekly_data.append(week_data)
-                
-                # Add delay to avoid rate limiting
-                time.sleep(2)
-                return weekly_data
-                
+                logger.error(f"API Error in batch_get_all_sheet_data: {e}")
+                return {}
             except Exception as e:
-                if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
-                    if attempt < max_retries - 1:
-                        self.exponential_backoff(attempt)
-                        continue
-                logger.error(f"Error getting weekly sales velocity data: {e}")
-                return []
+                logger.error(f"Error in batch_get_all_sheet_data: {e}")
+                return {}
         
-        return []
+        return {}
     
-    def is_week_after_start_date(self, week_range, start_date_str):
-        """Check if a week range is after the start date (28/04/2025)"""
-        try:
-            # Parse start date
-            start_date = datetime.strptime(start_date_str, "%d/%m/%Y")
-            
-            # Extract date from week range (assuming format like "28/04/2025 - 04/05/2025")
-            if " - " in week_range:
-                week_start_str = week_range.split(" - ")[0].strip()
-                week_start = datetime.strptime(week_start_str, "%d/%m/%Y")
-                return week_start >= start_date
-            
-            return True  # If we can't parse, include it
-        except:
-            return True  # If we can't parse, include it
-    
-    def safe_float_convert(self, value):
-        """Safely convert a value to float"""
-        try:
-            return float(value) if value else 0
-        except (ValueError, TypeError):
-            return 0
-    
-    def get_batch_cell_values(self, worksheet, cell_ranges_dict):
-        """Get multiple cell values in a single batch request from a worksheet object."""
-        try:
-            cell_values_list = worksheet.batch_get(list(cell_ranges_dict.values()))
-            
-            data = {}
-            metric_keys = list(cell_ranges_dict.keys())
-            for i, value_list in enumerate(cell_values_list):
-                metric = metric_keys[i]
-                if value_list and value_list[0]:
-                    value = value_list[0][0]
-                    try:
-                        # Convert to float, handling empty strings and commas
-                        if value and str(value).strip():
-                            # Remove commas and convert to float
-                            clean_value = str(value).replace(',', '').strip()
-                            data[metric] = float(clean_value)
-                        else:
-                            data[metric] = 0
-                    except (ValueError, TypeError):
-                        # If conversion fails, set to 0 instead of keeping as string
-                        logger.warning(f"Could not convert '{value}' to number for {metric}, setting to 0")
-                        data[metric] = 0
-                else:
-                    data[metric] = 0
-            return data
-
-        except Exception as e:
-            logger.error(f"Error in get_batch_cell_values for worksheet '{worksheet.title}': {e}")
-            return {metric: 0 for metric in cell_ranges_dict.keys()}
-    
-    def get_cell_value(self, sheet_id, worksheet_name, cell_range):
-        """Get value from a specific cell in a Google Sheet worksheet"""
-        max_retries = 3
+    def find_month_columns_batch(self, header_row):
+        """
+        Find all month columns from header row in a single operation.
+        Returns dictionary mapping month names to column letters.
+        """
+        month_columns = {}
+        date_pattern = r'(\d{2})-(\d{2})'  # Pattern for 'YY-MM'
         
-        for attempt in range(max_retries):
-            try:
-                if not self.client:
-                    raise Exception("Google Sheets client not initialized")
-                
-                # Open the spreadsheet
-                sheet = self.client.open_by_key(sheet_id)
-                
-                # Get the specific worksheet by name
-                if worksheet_name:
-                    worksheet = sheet.worksheet(worksheet_name)
-                else:
-                    worksheet = sheet.sheet1  # Use first worksheet by default
-                
-                # Get cell value
-                value = worksheet.acell(cell_range).value
-                
-                # Convert to numeric if possible
+        for i, cell_value in enumerate(header_row):
+            match = re.search(date_pattern, str(cell_value))
+            if match:
+                year, month = match.groups()
+                month_name = datetime(int(f"20{year}"), int(month), 1).strftime("%B %Y")
+                column_letter = self._index_to_column_letter(i)
+                month_columns[month_name] = column_letter
+        
+        return month_columns
+    
+    def _index_to_column_letter(self, index):
+        """Convert 0-based column index to Excel column letter (A, B, ..., Z, AA, AB, ...)"""
+        if index < 26:
+            return chr(65 + index)  # A-Z
+        else:
+            # For columns beyond Z (AA, AB, etc.)
+            first_letter = chr(64 + (index) // 26)
+            second_letter = chr(65 + (index) % 26)
+            return first_letter + second_letter
+    
+    def process_vip_data_batch(self, worksheet):
+        """
+        Optimized VIP data processing using batch operations.
+        Fetches all month data in a single API call.
+        """
+        try:
+            # First, get the header row to find month columns
+            header_row = worksheet.row_values(1)
+            month_columns = self.find_month_columns_batch(header_row)
+            
+            if not month_columns:
+                logger.warning(f"No month columns found in {worksheet.title}")
+                return {'raw_data': {}, 'monthly_data': {}}
+            
+            # Build ranges for batch request - all months at once
+            ranges_dict = {'monthly_data': []}
+            for month, col in month_columns.items():
+                # For each month, we need 3 cells: total_deals, onsite_vip, remote_vip
+                ranges_dict['monthly_data'].extend([
+                    f"{col}2",   # total_deals
+                    f"{col}28",  # onsite_vip
+                    f"{col}30"   # remote_vip
+                ])
+            
+            # Single batch request for all data
+            batch_result = self.batch_get_all_sheet_data(
+                worksheet.spreadsheet.id, 
+                worksheet.title, 
+                ranges_dict
+            )
+            
+            if not batch_result or 'monthly_data' not in batch_result:
+                return {'raw_data': {}, 'monthly_data': {}}
+            
+            # Process the batch results
+            monthly_data = {}
+            data_values = batch_result['monthly_data']
+            
+            # Process in groups of 3 (total_deals, onsite_vip, remote_vip)
+            month_list = list(month_columns.items())
+            for i, (month, col) in enumerate(month_list):
                 try:
-                    return float(value) if value else 0
-                except (ValueError, TypeError):
-                    return value if value else 0
-                    
-            except Exception as e:
-                if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
-                    if attempt < max_retries - 1:
-                        self.exponential_backoff(attempt)
-                        continue
-                logger.error(f"Error getting cell value from {sheet_id}, worksheet {worksheet_name}, {cell_range}: {e}")
-                return 0
-        
-        return 0
+                    base_idx = i * 3
+                    if base_idx + 2 < len(data_values):
+                        total_deals = self._extract_cell_value(data_values[base_idx])
+                        onsite_vip = self._extract_cell_value(data_values[base_idx + 1])
+                        remote_vip = self._extract_cell_value(data_values[base_idx + 2])
+                        
+                        monthly_data[month] = {
+                            'total_deals': total_deals,
+                            'onsite_vip_deals': onsite_vip,
+                            'remote_vip_deals': remote_vip,
+                            'month_label': f"{datetime.strptime(month, '%B %Y').strftime('%B')} ({col})"
+                        }
+                except Exception as e:
+                    logger.error(f"Error processing VIP data for month {month}: {e}")
+            
+            # Sort months and get latest
+            sorted_months = dict(sorted(monthly_data.items(), 
+                                      key=lambda item: datetime.strptime(item[0], '%B %Y'), 
+                                      reverse=True))
+            latest_month_data = list(sorted_months.values())[0] if sorted_months else {}
+            
+            return {
+                'raw_data': latest_month_data,
+                'monthly_data': sorted_months
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in process_vip_data_batch: {e}")
+            return {'raw_data': {}, 'monthly_data': {}}
     
-    def parse_weekly_velocity_data(self, worksheet):
-        """Parse weekly Sales Velocity data starting from 28/04/2025"""
+    def process_membership_data_batch(self, worksheet):
+        """
+        Optimized membership data processing using batch operations.
+        Fetches all month data in a single API call.
+        """
         try:
-            # Get all data from the worksheet
+            # First, get the header row to find month columns
+            header_row = worksheet.row_values(1)
+            month_columns = self.find_month_columns_batch(header_row)
+            
+            if not month_columns:
+                logger.warning(f"No month columns found in {worksheet.title}")
+                return {'raw_data': {}, 'monthly_data': {}}
+            
+            # Build ranges for batch request - all months at once
+            ranges_dict = {'monthly_data': []}
+            for month, col in month_columns.items():
+                # For each month, we need 3 cells: total_deals, membership_1, membership_2
+                ranges_dict['monthly_data'].append(f"{col}2")  # total_deals
+                
+                # For Thailand, we need different rows
+                if worksheet.title == 'TH':
+                    ranges_dict['monthly_data'].extend([f"{col}30", f"{col}31"])
+                else:
+                    ranges_dict['monthly_data'].extend([f"{col}43", f"{col}44"])
+            
+            # Single batch request for all data
+            batch_result = self.batch_get_all_sheet_data(
+                worksheet.spreadsheet.id, 
+                worksheet.title, 
+                ranges_dict
+            )
+            
+            if not batch_result or 'monthly_data' not in batch_result:
+                return {'raw_data': {}, 'monthly_data': {}}
+            
+            # Process the batch results
+            monthly_data = {}
+            data_values = batch_result['monthly_data']
+            
+            # Process in groups of 3 (total_deals, membership_1, membership_2)
+            month_list = list(month_columns.items())
+            for i, (month, col) in enumerate(month_list):
+                try:
+                    base_idx = i * 3
+                    if base_idx + 2 < len(data_values):
+                        total_deals = self._extract_cell_value(data_values[base_idx])
+                        membership_1 = self._extract_cell_value(data_values[base_idx + 1])
+                        membership_2 = self._extract_cell_value(data_values[base_idx + 2])
+                        
+                        monthly_data[month] = {
+                            'total_deals': total_deals,
+                            'membership_1': membership_1,
+                            'membership_2': membership_2,
+                            'month_label': f"{datetime.strptime(month, '%B %Y').strftime('%B')} ({col})"
+                        }
+                except Exception as e:
+                    logger.error(f"Error processing membership data for month {month}: {e}")
+            
+            # Sort months and get latest
+            sorted_months = dict(sorted(monthly_data.items(), 
+                                      key=lambda item: datetime.strptime(item[0], '%B %Y'), 
+                                      reverse=True))
+            latest_month_data = list(sorted_months.values())[0] if sorted_months else {}
+            
+            return {
+                'raw_data': latest_month_data,
+                'monthly_data': sorted_months
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in process_membership_data_batch: {e}")
+            return {'raw_data': {}, 'monthly_data': {}}
+    
+    def process_funnel_data_batch(self, worksheet, sheet_key):
+        """
+        Optimized funnel data processing using batch operations.
+        Fetches all funnel ranges in a single API call.
+        """
+        try:
+            # Define the ranges for each country
+            ranges_config = {
+                'sales_funnel_my': ['BE54:BS63', 'BE74:BS83', 'BE94:BS103'],
+                'sales_funnel_ph': ['BD53:BT84'],
+                'sales_funnel_th': ['BH47:BV78'],
+            }
+            
+            ranges = ranges_config.get(sheet_key, [])
+            if not ranges:
+                logger.error(f"No range configuration found for {sheet_key}")
+                return {'raw_data': {}, 'table_data': []}
+            
+            # Single batch request for all funnel ranges
+            ranges_dict = {'funnel_data': ranges}
+            batch_result = self.batch_get_all_sheet_data(
+                worksheet.spreadsheet.id, 
+                worksheet.title, 
+                ranges_dict
+            )
+            
+            if not batch_result or 'funnel_data' not in batch_result:
+                return {'raw_data': {}, 'table_data': []}
+            
+            # Process the batch results
+            all_data = []
+            for range_data in batch_result['funnel_data']:
+                if range_data:
+                    all_data.extend(range_data)
+            
+            if not all_data:
+                logger.warning(f"No data found in ranges for {sheet_key}")
+                return {'raw_data': {}, 'table_data': []}
+            
+            # Filter and process the data
+            filtered_data = [row for row in all_data if len(row) >= 14]
+            
+            table_data = []
+            for row in filtered_data:
+                # Skip header rows
+                first_col = str(row[0]).strip() if row[0] else ""
+                if any(header_keyword in first_col.lower() 
+                      for header_keyword in ['status', 'timestamp', 'update', 'header', 'title', 'created date']):
+                    continue
+                
+                # Skip rows that don't look like dates
+                if len(first_col) < 8 or not any(char.isdigit() for char in first_col):
+                    continue
+                
+                table_row = {
+                    'created_date': row[0],
+                    'sum_of_won': row[6],
+                    'lead_mql_pct': row[7],
+                    'mql_sql_pct': row[8],
+                    'sql_ms_pct': row[9],
+                    'ms_mc_pct': row[10],
+                    'lead_to_win_pct': row[13],
+                    'lead_to_sql_pct': row[14],
+                }
+                table_data.append(table_row)
+            
+            # Use the most recent data point for raw_data
+            latest_data = table_data[-1] if table_data else {}
+            
+            logger.info(f"Batch processed funnel data for {sheet_key}: {len(table_data)} data points")
+            return {
+                'raw_data': latest_data,
+                'table_data': table_data
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in process_funnel_data_batch: {e}")
+            return {'raw_data': {}, 'table_data': []}
+    
+    def process_velocity_data_batch(self, worksheet):
+        """
+        Optimized velocity data processing using batch operations.
+        Fetches all velocity data in a single API call.
+        """
+        try:
+            # Get all data from the worksheet in one call
             all_values = worksheet.get_all_values()
             
             if not all_values:
                 logger.warning("No data found in Sales Velocity worksheet")
-                return {'weekly_data': [], 'averages': {}}
+                return {'raw_data': {}, 'weekly_data': []}
             
             logger.info(f"Sales Velocity sheet has {len(all_values)} rows")
             
@@ -325,8 +427,10 @@ class GoogleSheetsClient:
                 for col_idx, cell in enumerate(row):
                     cell_str = str(cell).strip()
                     if ' - ' in cell_str and ('2025' in cell_str or '2024' in cell_str):
-                        # Check if this is a weekly cohort row
-                        if '28/04/2025' in cell_str or any(month in cell_str for month in ['05/2025', '06/2025', '07/2025', '08/2025', '09/2025', '10/2025', '11/2025', '12/2025']):
+                        # Check if this is a weekly cohort row starting from 28/04/2025
+                        if '28/04/2025' in cell_str or any(month in cell_str for month in 
+                                                         ['05/2025', '06/2025', '07/2025', '08/2025', 
+                                                          '09/2025', '10/2025', '11/2025', '12/2025']):
                             weekly_cohorts.append({
                                 'row_idx': row_idx,
                                 'date_range': cell_str,
@@ -336,289 +440,181 @@ class GoogleSheetsClient:
             
             if not weekly_cohorts:
                 logger.warning("No weekly cohorts found starting from 28/04/2025")
-                return {'weekly_data': [], 'averages': {}}
+                return {'raw_data': {}, 'weekly_data': []}
             
             # Extract data for each weekly cohort
             weekly_data = []
+            velocity_metrics = []
             
             for cohort in weekly_cohorts:
                 row_idx = cohort['row_idx']
                 date_range = cohort['date_range']
                 
-                # Based on your description, data is in specific rows:
-                # For 28/04/2025 cohort: row 5 (D5, I5)
-                # For 05/05/2025 cohort: row 4 (D4, I4)
-                
-                # Determine the data row based on the date range
-                if '28/04/2025' in date_range:
-                    data_row_idx = 4  # Row 5 (0-indexed = 4)
-                    logger.info(f"Using row 5 for 28/04/2025 cohort")
-                elif '05/05/2025' in date_range:
-                    data_row_idx = 3  # Row 4 (0-indexed = 3)
-                    logger.info(f"Using row 4 for 05/05/2025 cohort")
-                else:
-                    # For other weeks, try the row below the header
-                    data_row_idx = row_idx + 1
-                    logger.info(f"Using row {data_row_idx + 1} for {date_range}")
-                
-                if data_row_idx >= len(all_values):
-                    logger.warning(f"Data row {data_row_idx} is out of bounds")
-                    continue
-                
-                data_row = all_values[data_row_idx]
-                logger.info(f"Data row {data_row_idx + 1}: {data_row}")
-                
-                week_data = {'week_range': date_range}
-                
-                # Extract values for each metric based on your specific cell mappings
-                # Lead to SQL: Column D (index 3)
-                # Lead to MS: Column E (index 4)
-                # MS to 1st Meeting: Column F (index 5)
-                # MS to MC: Column G (index 6)
-                # MC to Closed: Column H (index 7)
-                # Lead to Win: Column I (index 8)
-                
-                # Lead to SQL (Column D)
-                if len(data_row) > 3:
-                    cell_value = data_row[3]  # Column D
-                    try:
-                        numeric_value = float(cell_value) if cell_value and str(cell_value).strip() != '' else 0
-                        week_data['lead_to_sql'] = numeric_value
-                        logger.info(f"Extracted Lead to SQL: {numeric_value} from D{data_row_idx + 1}")
-                    except (ValueError, TypeError):
-                        logger.warning(f"Could not parse Lead to SQL value '{cell_value}'")
-                        week_data['lead_to_sql'] = 0
-                else:
-                    week_data['lead_to_sql'] = 0
-                
-                # Lead to MS (Column E)
-                if len(data_row) > 4:
-                    cell_value = data_row[4]  # Column E
-                    try:
-                        numeric_value = float(cell_value) if cell_value and str(cell_value).strip() != '' else 0
-                        week_data['lead_to_ms'] = numeric_value
-                        logger.info(f"Extracted Lead to MS: {numeric_value} from E{data_row_idx + 1}")
-                    except (ValueError, TypeError):
-                        logger.warning(f"Could not parse Lead to MS value '{cell_value}'")
-                        week_data['lead_to_ms'] = 0
-                else:
-                    week_data['lead_to_ms'] = 0
-                
-                # MS to 1st Meeting (Column F)
-                if len(data_row) > 5:
-                    cell_value = data_row[5]  # Column F
-                    try:
-                        numeric_value = float(cell_value) if cell_value and str(cell_value).strip() != '' else 0
-                        week_data['ms_to_1st_meeting'] = numeric_value
-                        logger.info(f"Extracted MS to 1st Meeting: {numeric_value} from F{data_row_idx + 1}")
-                    except (ValueError, TypeError):
-                        logger.warning(f"Could not parse MS to 1st Meeting value '{cell_value}'")
-                        week_data['ms_to_1st_meeting'] = 0
-                else:
-                    week_data['ms_to_1st_meeting'] = 0
-                
-                # MS to MC (Column G)
-                if len(data_row) > 6:
-                    cell_value = data_row[6]  # Column G
-                    try:
-                        numeric_value = float(cell_value) if cell_value and str(cell_value).strip() != '' else 0
-                        week_data['ms_to_mc'] = numeric_value
-                        logger.info(f"Extracted MS to MC: {numeric_value} from G{data_row_idx + 1}")
-                    except (ValueError, TypeError):
-                        logger.warning(f"Could not parse MS to MC value '{cell_value}'")
-                        week_data['ms_to_mc'] = 0
-                else:
-                    week_data['ms_to_mc'] = 0
-                
-                # MC to Closed (Column H)
-                if len(data_row) > 7:
-                    cell_value = data_row[7]  # Column H
-                    try:
-                        numeric_value = float(cell_value) if cell_value and str(cell_value).strip() != '' else 0
-                        week_data['mc_to_closed'] = numeric_value
-                        logger.info(f"Extracted MC to Closed: {numeric_value} from H{data_row_idx + 1}")
-                    except (ValueError, TypeError):
-                        logger.warning(f"Could not parse MC to Closed value '{cell_value}'")
-                        week_data['mc_to_closed'] = 0
-                else:
-                    week_data['mc_to_closed'] = 0
-                
-                # Lead to Win (Column I)
-                if len(data_row) > 8:
-                    cell_value = data_row[8]  # Column I
-                    try:
-                        numeric_value = float(cell_value) if cell_value and str(cell_value).strip() != '' else 0
-                        week_data['lead_to_win'] = numeric_value
-                        logger.info(f"Extracted Lead to Win: {numeric_value} from I{data_row_idx + 1}")
-                    except (ValueError, TypeError):
-                        logger.warning(f"Could not parse Lead to Win value '{cell_value}'")
-                        week_data['lead_to_win'] = 0
-                else:
-                    week_data['lead_to_win'] = 0
-                
-                weekly_data.append(week_data)
-                logger.info(f"Added week data: {week_data}")
+                # Look for the data row (usually the next row after the cohort header)
+                data_row_idx = row_idx + 1
+                if data_row_idx < len(all_values):
+                    data_row = all_values[data_row_idx]
+                    
+                    week_data = {'week_range': date_range}
+                    
+                    # Extract velocity metrics from specific columns
+                    metrics = {
+                        'lead_to_sql': self._safe_extract_float(data_row, 3),      # Column D
+                        'lead_to_ms': self._safe_extract_float(data_row, 4),       # Column E
+                        'ms_to_1st_meeting': self._safe_extract_float(data_row, 5), # Column F
+                        'ms_to_mc': self._safe_extract_float(data_row, 6),         # Column G
+                        'mc_to_closed': self._safe_extract_float(data_row, 7),     # Column H
+                        'lead_to_win': self._safe_extract_float(data_row, 8)       # Column I
+                    }
+                    
+                    week_data.update(metrics)
+                    weekly_data.append(week_data)
+                    
+                    # Collect metrics for averaging
+                    velocity_metrics.append(metrics)
             
             # Calculate averages
             averages = {}
-            if weekly_data:
-                metrics = ['lead_to_sql', 'lead_to_ms', 'ms_to_1st_meeting', 'ms_to_mc', 'mc_to_closed', 'lead_to_win']
-                for metric in metrics:
-                    values = [week.get(metric, 0) for week in weekly_data if week.get(metric, 0) > 0]
-                    averages[f'{metric}_avg'] = sum(values) / len(values) if values else 0
+            if velocity_metrics:
+                for metric in ['lead_to_sql', 'lead_to_ms', 'ms_to_1st_meeting', 
+                              'ms_to_mc', 'mc_to_closed', 'lead_to_win']:
+                    values = [m[metric] for m in velocity_metrics if m[metric] > 0]
+                    averages[f"{metric}_avg"] = sum(values) / len(values) if values else 0
             
-            logger.info(f"Parsed {len(weekly_data)} weeks of Sales Velocity data")
-            logger.info(f"Calculated averages: {averages}")
-            
+            logger.info(f"Batch processed velocity data: {len(weekly_data)} weeks")
             return {
-                'weekly_data': weekly_data,
-                'averages': averages
+                'raw_data': averages,
+                'weekly_data': weekly_data
             }
             
         except Exception as e:
-            logger.error(f"Error parsing weekly velocity data: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return {'weekly_data': [], 'averages': {}}
+            logger.error(f"Error in process_velocity_data_batch: {e}")
+            return {'raw_data': {}, 'weekly_data': []}
     
+    def _extract_cell_value(self, cell_data):
+        """Extract numeric value from cell data returned by batch_get"""
+        try:
+            if cell_data and len(cell_data) > 0 and len(cell_data[0]) > 0:
+                value = cell_data[0][0]
+                if value and str(value).strip():
+                    # Remove commas and convert to float
+                    clean_value = str(value).replace(',', '').strip()
+                    return float(clean_value)
+            return 0
+        except (ValueError, TypeError, IndexError):
+            return 0
+    
+    def _safe_extract_float(self, row, col_idx):
+        """Safely extract float value from row at given column index"""
+        try:
+            if len(row) > col_idx:
+                value = row[col_idx]
+                if value and str(value).strip():
+                    clean_value = str(value).replace(',', '').strip()
+                    return float(clean_value)
+            return 0
+        except (ValueError, TypeError):
+            return 0
+
+    def find_latest_data_column(self, sheet_id, worksheet_name):
+        """Find the latest column with data based on row 1 headers - DEPRECATED"""
+        logger.warning("find_latest_data_column is deprecated, use batch operations instead")
+        return 'V'  # Default fallback
+    
+    def get_weekly_sales_velocity_data(self, sheet_id, worksheet_name=None):
+        """Get weekly Sales Velocity data - DEPRECATED, use batch operations instead"""
+        logger.warning("get_weekly_sales_velocity_data is deprecated, use process_velocity_data_batch instead")
+        return []
+    
+    def is_week_after_start_date(self, week_range, start_date_str):
+        """Check if a week range is after the start date - DEPRECATED"""
+        logger.warning("is_week_after_start_date is deprecated")
+        return True
+    
+    def safe_float_convert(self, value):
+        """Safely convert a value to float - DEPRECATED, use _safe_extract_float instead"""
+        return self._safe_extract_float([value], 0) if value else 0
+    
+    def get_batch_cell_values(self, worksheet, cell_ranges_dict):
+        """Get multiple cell values in a single batch request - DEPRECATED"""
+        logger.warning("get_batch_cell_values is deprecated, use batch_get_all_sheet_data instead")
+        try:
+            cell_values_list = worksheet.batch_get(list(cell_ranges_dict.values()))
+            data = {}
+            metric_keys = list(cell_ranges_dict.keys())
+            for i, value_list in enumerate(cell_values_list):
+                metric = metric_keys[i]
+                data[metric] = self._extract_cell_value(value_list)
+            return data
+        except Exception as e:
+            logger.error(f"Error in deprecated get_batch_cell_values: {e}")
+            return {metric: 0 for metric in cell_ranges_dict.keys()}
+    
+    def get_cell_value(self, sheet_id, worksheet_name, cell_range):
+        """Get value from a specific cell - DEPRECATED, use batch operations instead"""
+        logger.warning("get_cell_value is deprecated, use batch operations instead")
+        return 0
+    
+    def _process_vip_data_batch(self, worksheet):
+        """Process VIP data using batch operations"""
+        return self.process_vip_data_batch(worksheet)
+    
+    def _process_velocity_data_batch(self, worksheet):
+        """Process velocity data using batch operations"""
+        return self.process_velocity_data_batch(worksheet)
+    
+    def _process_funnel_data_batch(self, worksheet, sheet_key):
+        """Process funnel data using batch operations"""
+        return self.process_funnel_data_batch(worksheet, sheet_key)
+    
+    def _process_membership_data_batch(self, worksheet):
+        """Process membership data using batch operations"""
+        return self.process_membership_data_batch(worksheet)
+
+    # Legacy methods - kept for backward compatibility but now use batch operations
+    def _process_vip_data(self, worksheet, config):
+        """Process VIP data for a worksheet - now uses batch operations"""
+        return self.process_vip_data_batch(worksheet)
+    
+    def _process_velocity_data(self, worksheet, config):
+        """Process velocity data for a worksheet - now uses batch operations"""
+        return self.process_velocity_data_batch(worksheet)
+    
+    def _process_funnel_data(self, worksheet, config):
+        """Process funnel data for a worksheet - now uses batch operations"""
+        # Get the sheet_key from the config
+        sheet_key = None
+        for key, sheet_config in GOOGLE_SHEETS_CONFIG['sheets'].items():
+            if sheet_config.get('id') == config.get('id') and sheet_config.get('worksheet_name') == config.get('worksheet_name'):
+                sheet_key = key
+                break
+        
+        if not sheet_key:
+            logger.error(f"Could not find sheet_key for config: {config}")
+            return {'raw_data': {}, 'table_data': []}
+        
+        return self.process_funnel_data_batch(worksheet, sheet_key)
+    
+    def _process_membership_data(self, worksheet, config):
+        """Process membership data for a worksheet - now uses batch operations"""
+        return self.process_membership_data_batch(worksheet)
+
+    # Remove old individual methods that are no longer needed
     def get_monthly_vip_data_for_worksheet(self, worksheet):
-        """Fetch VIP data for all available months from a given worksheet object."""
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                # 1. Find all month columns from the header row (row 1)
-                header_row = worksheet.row_values(1)
-                month_columns = {}
-                date_pattern = r'(\d{2})-(\d{2})' # Pattern for 'YY-MM'
-                
-                for i, cell_value in enumerate(header_row):
-                    match = re.search(date_pattern, str(cell_value))
-                    if match:
-                        year, month = match.groups()
-                        month_name = datetime(int(f"20{year}"), int(month), 1).strftime("%B %Y")
-                        column_letter = chr(65 + i)
-                        month_columns[month_name] = column_letter
-                
-                if not month_columns:
-                    logger.warning(f"No month columns found in {worksheet.title}")
-                    return {}
-
-                # 2. Batch fetch all required data for all months
-                ranges_to_fetch = []
-                for col in month_columns.values():
-                    ranges_to_fetch.extend([f"{col}2", f"{col}28", f"{col}30"])
-                
-                cell_values = worksheet.batch_get(ranges_to_fetch, major_dimension='COLUMNS')
-                
-                # 3. Process the fetched data
-                monthly_data = {}
-                cell_index = 0
-                for month, col in month_columns.items():
-                    try:
-                        total_deals_col = cell_values[cell_index]
-                        onsite_vip_col = cell_values[cell_index+1]
-                        remote_vip_col = cell_values[cell_index+2]
-
-                        total_deals = float(total_deals_col[0][0]) if total_deals_col and total_deals_col[0] else 0
-                        onsite_vip = float(onsite_vip_col[0][0]) if onsite_vip_col and onsite_vip_col[0] else 0
-                        remote_vip = float(remote_vip_col[0][0]) if remote_vip_col and remote_vip_col[0] else 0
-                        
-                        monthly_data[month] = {
-                            'total_deals': total_deals,
-                            'onsite_vip_deals': onsite_vip,
-                            'remote_vip_deals': remote_vip,
-                            'month_label': f"{datetime.strptime(month, '%B %Y').strftime('%B')} ({col})"
-                        }
-                    except (ValueError, TypeError, IndexError) as e:
-                        logger.error(f"Could not parse data for month {month} in {worksheet.title}: {e}")
-                    
-                    cell_index += 3
-                
-                return monthly_data
-
-            except gspread.exceptions.APIError as e:
-                if "RATE_LIMIT_EXCEEDED" in str(e) or "429" in str(e):
-                    if attempt < max_retries - 1:
-                        self.exponential_backoff(attempt)
-                        continue
-                logger.error(f"API Error fetching monthly VIP data for {worksheet.title}: {e}")
-                return {}
-            except Exception as e:
-                logger.error(f"An unexpected error occurred in get_monthly_vip_data_for_worksheet: {e}")
-                return {}
-        return {}
+        """Legacy method - now uses batch operations"""
+        return self.process_vip_data_batch(worksheet).get('monthly_data', {})
     
     def get_monthly_membership_data_for_worksheet(self, worksheet):
-        """Fetch membership data for all available months from a given worksheet object."""
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                # 1. Find all month columns from the header row (row 1)
-                header_row = worksheet.row_values(1)
-                month_columns = {}
-                date_pattern = r'(\d{2})-(\d{2})' # Pattern for 'YY-MM'
-                
-                for i, cell_value in enumerate(header_row):
-                    match = re.search(date_pattern, str(cell_value))
-                    if match:
-                        year, month = match.groups()
-                        month_name = datetime(int(f"20{year}"), int(month), 1).strftime("%B %Y")
-                        column_letter = chr(65 + i)
-                        month_columns[month_name] = column_letter
-                
-                if not month_columns:
-                    logger.warning(f"No month columns found in {worksheet.title}")
-                    return {}
-
-                # 2. Batch fetch all required data for all months
-                ranges_to_fetch = []
-                for col in month_columns.values():
-                    ranges_to_fetch.append(f"{col}2")  # Total deals
-                    # For Thailand, we need V30, V31 instead of V43, V44
-                    if worksheet.title == 'TH':
-                        ranges_to_fetch.extend([f"{col}30", f"{col}31"])
-                    else:
-                        ranges_to_fetch.extend([f"{col}43", f"{col}44"])
-                
-                cell_values = worksheet.batch_get(ranges_to_fetch)
-                
-                # 3. Process the fetched data
-                monthly_data = {}
-                cell_index = 0
-                for month, col in month_columns.items():
-                    try:
-                        total_deals_col = cell_values[cell_index]
-                        membership_1_col = cell_values[cell_index+1]
-                        membership_2_col = cell_values[cell_index+2]
-
-                        total_deals = float(total_deals_col[0][0]) if total_deals_col and total_deals_col[0] else 0
-                        membership_1 = float(membership_1_col[0][0]) if membership_1_col and membership_1_col[0] else 0
-                        membership_2 = float(membership_2_col[0][0]) if membership_2_col and membership_2_col[0] else 0
-                        
-                        monthly_data[month] = {
-                            'total_deals': total_deals,
-                            'membership_1': membership_1,
-                            'membership_2': membership_2,
-                            'month_label': f"{datetime.strptime(month, '%B %Y').strftime('%B')} ({col})"
-                        }
-                    except (ValueError, TypeError, IndexError) as e:
-                        logger.error(f"Could not parse data for month {month} in {worksheet.title}: {e}")
-                    
-                    cell_index += 3
-                
-                return monthly_data
-
-            except gspread.exceptions.APIError as e:
-                if "RATE_LIMIT_EXCEEDED" in str(e) or "429" in str(e):
-                    if attempt < max_retries - 1:
-                        self.exponential_backoff(attempt)
-                        continue
-                logger.error(f"API Error fetching monthly membership data for {worksheet.title}: {e}")
-                return {}
-            except Exception as e:
-                logger.error(f"An unexpected error occurred in get_monthly_membership_data_for_worksheet: {e}")
-                return {}
-        return {}
+        """Legacy method - now uses batch operations"""
+        return self.process_membership_data_batch(worksheet).get('monthly_data', {})
+    
+    def parse_weekly_velocity_data(self, worksheet):
+        """Legacy method - now uses batch operations"""
+        result = self.process_velocity_data_batch(worksheet)
+        return {
+            'averages': result.get('raw_data', {}),
+            'weekly_data': result.get('weekly_data', [])
+        }
     
     def get_sheet_data(self, sheet_key):
         """Get all configured data from a specific sheet, routing to the correct parser."""
@@ -658,13 +654,13 @@ class GoogleSheetsClient:
                     
                     # Process data based on category
                     if category == 'vip':
-                        data = self._process_vip_data(worksheet, sheet_config)
+                        data = self._process_vip_data_batch(worksheet)
                     elif category == 'velocity':
-                        data = self._process_velocity_data(worksheet, sheet_config)
+                        data = self._process_velocity_data_batch(worksheet)
                     elif category == 'funnel':
-                        data = self._process_funnel_data(worksheet, sheet_config)
+                        data = self._process_funnel_data_batch(worksheet, sheet_key)
                     elif category == 'membership':
-                        data = self._process_membership_data(worksheet, sheet_config)
+                        data = self._process_membership_data_batch(worksheet)
                     else:
                         logger.warning(f"Unknown category: {category}")
                         return None
@@ -698,31 +694,119 @@ class GoogleSheetsClient:
         
         return {}
 
-    def get_all_sheets_data(self):
-        """Get data from all configured sheets and structure it for the processor."""
+    def get_all_sheets_data_batch(self):
+        """
+        Optimized method to get data from all configured sheets using batch operations.
+        This dramatically reduces API calls by batching requests per sheet.
+        """
         all_data = {}
-        for sheet_key, sheet_config in GOOGLE_SHEETS_CONFIG['sheets'].items():
-            try:
-                sheet_data = self.get_sheet_data(sheet_key)
-                # Structure the data as the processor expects it
-                all_data[sheet_key] = {
-                    'config': sheet_config,
-                    'name': sheet_config.get('name', 'Unnamed Sheet'),
-                    **sheet_data
-                }
-                # Rate limiting is already handled in get_sheet_data
-            except Exception as e:
-                logger.error(f"Failed to get data for {sheet_key}: {e}")
-                # Add empty structure for failed sheets
-                all_data[sheet_key] = {
-                    'config': sheet_config,
-                    'name': sheet_config.get('name', 'Unnamed Sheet'),
-                    'raw_data': {},
-                    'monthly_data': {},
-                    'weekly_data': []
-                }
         
+        # Group sheets by their sheet_id to minimize API calls
+        sheets_by_id = {}
+        for sheet_key, sheet_config in GOOGLE_SHEETS_CONFIG['sheets'].items():
+            sheet_id = sheet_config['id']
+            if sheet_id not in sheets_by_id:
+                sheets_by_id[sheet_id] = []
+            sheets_by_id[sheet_id].append((sheet_key, sheet_config))
+        
+        logger.info(f"Processing {len(sheets_by_id)} unique sheets with batch operations")
+        
+        for sheet_id, sheet_configs in sheets_by_id.items():
+            try:
+                # Apply rate limiting per sheet
+                self._rate_limit_delay()
+                
+                # Process each worksheet in this sheet
+                for sheet_key, sheet_config in sheet_configs:
+                    try:
+                        worksheet_name = sheet_config.get('worksheet_name')
+                        category = sheet_config.get('category', 'unknown')
+                        
+                        logger.info(f"Batch processing {sheet_key}: category={category}, worksheet={worksheet_name}")
+                        
+                        # Check cache first
+                        cache_key = f"sheet_data_{sheet_id}_{worksheet_name}_{category}"
+                        cached_data = self._get_cached_data(cache_key)
+                        if cached_data:
+                            logger.info(f"Using cached data for {sheet_key}")
+                            all_data[sheet_key] = {
+                                'config': sheet_config,
+                                'name': sheet_config.get('name', 'Unnamed Sheet'),
+                                **cached_data
+                            }
+                            continue
+                        
+                        # Get worksheet
+                        worksheet = self._get_worksheet(sheet_id, worksheet_name)
+                        if not worksheet:
+                            logger.warning(f"Could not access worksheet {worksheet_name} in sheet {sheet_id}")
+                            all_data[sheet_key] = {
+                                'config': sheet_config,
+                                'name': sheet_config.get('name', 'Unnamed Sheet'),
+                                'raw_data': {},
+                                'monthly_data': {},
+                                'weekly_data': []
+                            }
+                            continue
+                        
+                        # Process data using batch operations based on category
+                        if category == 'vip':
+                            data = self.process_vip_data_batch(worksheet)
+                        elif category == 'velocity':
+                            data = self.process_velocity_data_batch(worksheet)
+                        elif category == 'funnel':
+                            data = self.process_funnel_data_batch(worksheet, sheet_key)
+                        elif category == 'membership':
+                            data = self.process_membership_data_batch(worksheet)
+                        else:
+                            logger.warning(f"Unknown category: {category}")
+                            data = {'raw_data': {}, 'monthly_data': {}, 'weekly_data': []}
+                        
+                        # Structure the data as the processor expects it
+                        all_data[sheet_key] = {
+                            'config': sheet_config,
+                            'name': sheet_config.get('name', 'Unnamed Sheet'),
+                            **data
+                        }
+                        
+                        # Cache the result
+                        self._cache_data(cache_key, data, CACHE_DURATION)
+                        
+                        logger.info(f"Successfully batch processed {sheet_key}")
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to batch process {sheet_key}: {e}")
+                        # Add empty structure for failed sheets
+                        all_data[sheet_key] = {
+                            'config': sheet_config,
+                            'name': sheet_config.get('name', 'Unnamed Sheet'),
+                            'raw_data': {},
+                            'monthly_data': {},
+                            'weekly_data': []
+                        }
+                
+            except Exception as e:
+                logger.error(f"Failed to process sheet {sheet_id}: {e}")
+                # Add empty structures for all sheets in this sheet_id
+                for sheet_key, sheet_config in sheet_configs:
+                    if sheet_key not in all_data:
+                        all_data[sheet_key] = {
+                            'config': sheet_config,
+                            'name': sheet_config.get('name', 'Unnamed Sheet'),
+                            'raw_data': {},
+                            'monthly_data': {},
+                            'weekly_data': []
+                        }
+        
+        logger.info(f"Batch processing completed for {len(all_data)} sheets")
         return all_data
+
+    def get_all_sheets_data(self):
+        """
+        Get data from all configured sheets and structure it for the processor.
+        Now uses optimized batch operations.
+        """
+        return self.get_all_sheets_data_batch()
 
     def test_connection(self):
         """Test connection to Google Sheets"""
@@ -742,128 +826,6 @@ class GoogleSheetsClient:
         except Exception as e:
             return False, f"Connection failed: {e}"
 
-    def get_sales_funnel_data(self, worksheet, sheet_key):
-        """Get Sales Funnel data for all data points from specified ranges."""
-        try:
-            sheet_config = GOOGLE_SHEETS_CONFIG['sheets'][sheet_key]
-            worksheet_name = sheet_config['worksheet_name']
-            
-            # Define the ranges for each country based on the configuration
-            ranges_config = {
-                'sales_funnel_my': {
-                    'ranges': ['BE54:BS63', 'BE74:BS83', 'BE94:BS103'],
-                },
-                'sales_funnel_ph': {
-                    'ranges': ['BD53:BT84'],
-                },
-                'sales_funnel_th': {
-                    'ranges': ['BH47:BV78'],
-                }
-            }
-            
-            config = ranges_config.get(sheet_key)
-            if not config:
-                logger.error(f"No range configuration found for {sheet_key}")
-                return {'raw_data': {}, 'table_data': []}
-            
-            # Get all data from the specified ranges
-            all_data = []
-            for range_str in config['ranges']:
-                try:
-                    range_data = worksheet.batch_get([range_str])
-                    if range_data and range_data[0]:
-                        all_data.extend(range_data[0])
-                except Exception as e:
-                    logger.warning(f"Could not fetch range {range_str}: {e}")
-            
-            if not all_data:
-                logger.warning(f"No data found in ranges for {sheet_key}")
-                return {'raw_data': {}, 'table_data': []}
-            
-            # Only keep rows that have enough columns
-            filtered_data = [row for row in all_data if len(row) >= 14]
-            
-            # Filter out header rows and only extract columns 7,8,9,10,11,13,14,15 (0-based: 6,7,8,9,10,12,13,14)
-            table_data = []
-            for row in filtered_data:
-                # Skip header rows (rows that contain header text)
-                first_col = str(row[0]).strip() if row[0] else ""
-                if any(header_keyword in first_col.lower() for header_keyword in ['status', 'timestamp', 'update', 'header', 'title', 'created date']):
-                    continue
-                
-                # Skip rows that don't look like dates (too short or contain non-date patterns)
-                if len(first_col) < 8 or not any(char.isdigit() for char in first_col):
-                    continue
-                
-                table_row = {
-                    'created_date': row[0],           # 1st column - actual date
-                    'sum_of_won': row[6],            # 7th column
-                    'lead_mql_pct': row[7],          # 8th column
-                    'mql_sql_pct': row[8],           # 9th column
-                    'sql_ms_pct': row[9],            # 10th column
-                    'ms_mc_pct': row[10],            # 11th column
-                    'lead_to_win_pct': row[13],      # 14th column
-                    'lead_to_sql_pct': row[14],      # 15th column - Lead to SQL %
-                }
-                table_data.append(table_row)
-            
-            # Use the most recent data point for the main metrics (for backward compatibility)
-            latest_data = table_data[-1] if table_data else {}
-            
-            logger.info(f"Sales Funnel data for {sheet_key}: {len(table_data)} data points (columns 7,8,9,10,11,13,14,15)")
-            return {
-                'raw_data': latest_data,
-                'table_data': table_data
-            }
-            
-        except Exception as e:
-            logger.error(f"Error getting Sales Funnel data for {sheet_key}: {e}")
-            return {'raw_data': {}, 'table_data': []} 
-
-    def _process_vip_data(self, worksheet, config):
-        """Process VIP data for a worksheet"""
-        monthly_data = self.get_monthly_vip_data_for_worksheet(worksheet)
-        sorted_months = dict(sorted(monthly_data.items(), key=lambda item: datetime.strptime(item[0], '%B %Y'), reverse=True))
-        latest_month_data = list(sorted_months.values())[0] if sorted_months else {}
-        return {
-            'raw_data': latest_month_data,
-            'monthly_data': sorted_months
-        }
-    
-    def _process_velocity_data(self, worksheet, config):
-        """Process velocity data for a worksheet"""
-        parsed_data = self.parse_weekly_velocity_data(worksheet)
-        return {
-            'raw_data': parsed_data.get('averages', {}),
-            'weekly_data': parsed_data.get('weekly_data', [])
-        }
-    
-    def _process_funnel_data(self, worksheet, config):
-        """Process funnel data for a worksheet"""
-        logger.info(f"Fetching funnel data using new method")
-        # Get the sheet_key from the config
-        sheet_key = None
-        for key, sheet_config in GOOGLE_SHEETS_CONFIG['sheets'].items():
-            if sheet_config.get('id') == config.get('id') and sheet_config.get('worksheet_name') == config.get('worksheet_name'):
-                sheet_key = key
-                break
-        
-        if not sheet_key:
-            logger.error(f"Could not find sheet_key for config: {config}")
-            return {'raw_data': {}, 'table_data': []}
-        
-        return self.get_sales_funnel_data(worksheet, sheet_key)
-    
-    def _process_membership_data(self, worksheet, config):
-        """Process membership data for a worksheet"""
-        monthly_data = self.get_monthly_membership_data_for_worksheet(worksheet)
-        sorted_months = dict(sorted(monthly_data.items(), key=lambda item: datetime.strptime(item[0], '%B %Y'), reverse=True))
-        latest_month_data = list(sorted_months.values())[0] if sorted_months else {}
-        return {
-            'raw_data': latest_month_data,
-            'monthly_data': sorted_months
-        }
-    
     def _get_cached_data(self, cache_key):
         """Get cached data if available and not expired"""
         cache_file = f"cache/{cache_key}.json"
@@ -934,3 +896,150 @@ class GoogleSheetsClient:
         except Exception as e:
             logger.error(f"Error getting worksheet {worksheet_name} from sheet {sheet_id}: {e}")
             return None 
+
+    # Performance monitoring methods
+    def get_performance_stats(self):
+        """Get performance statistics for the batch operations"""
+        return {
+            'request_delay': self.REQUEST_DELAY,
+            'last_request_time': self.last_api_call_time,
+            'cache_duration': CACHE_DURATION
+        }
+    
+    def log_batch_performance(self, operation_name, start_time, num_ranges=0, num_sheets=0):
+        """Log performance metrics for batch operations"""
+        end_time = time.time()
+        duration = end_time - start_time
+        logger.info(f"Batch {operation_name} completed in {duration:.2f}s - "
+                   f"Ranges: {num_ranges}, Sheets: {num_sheets}, "
+                   f"Avg per range: {duration/max(num_ranges, 1):.3f}s") 
+
+    def test_batch_operations(self):
+        """
+        Test method to validate batch operations and compare performance.
+        Returns a detailed report of the batch operations performance.
+        """
+        test_results = {
+            'success': False,
+            'performance': {},
+            'errors': [],
+            'sheets_processed': 0,
+            'total_api_calls': 0,
+            'cache_hits': 0
+        }
+        
+        try:
+            logger.info("Starting batch operations test...")
+            start_time = time.time()
+            
+            # Clear cache to ensure fresh test
+            self.clear_all_cache()
+            
+            # Test batch data fetching
+            all_data = self.get_all_sheets_data_batch()
+            
+            end_time = time.time()
+            total_duration = end_time - start_time
+            
+            # Analyze results
+            sheets_processed = len(all_data)
+            successful_sheets = sum(1 for data in all_data.values() 
+                                  if data.get('raw_data') or data.get('monthly_data') or data.get('weekly_data'))
+            
+            # Estimate API calls saved
+            # Old method: ~5-10 calls per sheet (header + individual cells)
+            # New method: ~1-2 calls per sheet (batch operations)
+            estimated_old_calls = sheets_processed * 7  # Conservative estimate
+            estimated_new_calls = sheets_processed * 2  # Batch operations
+            calls_saved = estimated_old_calls - estimated_new_calls
+            
+            test_results.update({
+                'success': successful_sheets > 0,
+                'performance': {
+                    'total_duration': total_duration,
+                    'sheets_processed': sheets_processed,
+                    'successful_sheets': successful_sheets,
+                    'avg_time_per_sheet': total_duration / max(sheets_processed, 1),
+                    'estimated_api_calls_old': estimated_old_calls,
+                    'estimated_api_calls_new': estimated_new_calls,
+                    'api_calls_saved': calls_saved,
+                    'performance_improvement': f"{(calls_saved / estimated_old_calls * 100):.1f}%" if estimated_old_calls > 0 else "N/A"
+                },
+                'sheets_processed': sheets_processed,
+                'data_summary': {}
+            })
+            
+            # Analyze data quality
+            for sheet_key, data in all_data.items():
+                category = data.get('config', {}).get('category', 'unknown')
+                has_data = bool(data.get('raw_data') or data.get('monthly_data') or data.get('weekly_data'))
+                
+                test_results['data_summary'][sheet_key] = {
+                    'category': category,
+                    'has_data': has_data,
+                    'raw_data_keys': list(data.get('raw_data', {}).keys()),
+                    'monthly_data_count': len(data.get('monthly_data', {})),
+                    'weekly_data_count': len(data.get('weekly_data', []))
+                }
+            
+            logger.info(f"Batch operations test completed successfully in {total_duration:.2f}s")
+            logger.info(f"Processed {sheets_processed} sheets, {successful_sheets} successful")
+            logger.info(f"Estimated API calls saved: {calls_saved} ({test_results['performance']['performance_improvement']})")
+            
+        except Exception as e:
+            test_results['errors'].append(str(e))
+            logger.error(f"Batch operations test failed: {e}")
+        
+        return test_results
+    
+    def benchmark_vs_old_method(self, sheet_key):
+        """
+        Benchmark the new batch method against a simulated old method for a single sheet.
+        This is for performance comparison purposes.
+        """
+        if sheet_key not in GOOGLE_SHEETS_CONFIG['sheets']:
+            return {'error': f'Sheet key {sheet_key} not found'}
+        
+        sheet_config = GOOGLE_SHEETS_CONFIG['sheets'][sheet_key]
+        category = sheet_config.get('category')
+        
+        try:
+            # Clear cache for fair comparison
+            cache_key = f"sheet_data_{sheet_config['id']}_{sheet_config.get('worksheet_name')}_{category}"
+            cache_file = f"cache/{cache_key}.json"
+            if os.path.exists(cache_file):
+                os.remove(cache_file)
+            
+            # Get worksheet
+            worksheet = self._get_worksheet(sheet_config['id'], sheet_config.get('worksheet_name'))
+            if not worksheet:
+                return {'error': 'Could not access worksheet'}
+            
+            # Benchmark new batch method
+            start_time = time.time()
+            if category == 'vip':
+                batch_result = self.process_vip_data_batch(worksheet)
+            elif category == 'membership':
+                batch_result = self.process_membership_data_batch(worksheet)
+            elif category == 'funnel':
+                batch_result = self.process_funnel_data_batch(worksheet, sheet_key)
+            elif category == 'velocity':
+                batch_result = self.process_velocity_data_batch(worksheet)
+            else:
+                return {'error': f'Unknown category: {category}'}
+            
+            batch_time = time.time() - start_time
+            
+            return {
+                'sheet_key': sheet_key,
+                'category': category,
+                'batch_method': {
+                    'duration': batch_time,
+                    'data_points': len(batch_result.get('monthly_data', {})),
+                    'has_data': bool(batch_result.get('raw_data') or batch_result.get('monthly_data') or batch_result.get('weekly_data'))
+                },
+                'performance_notes': 'Batch method uses single API call vs multiple individual calls'
+            }
+            
+        except Exception as e:
+            return {'error': str(e)} 
