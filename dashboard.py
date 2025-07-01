@@ -309,6 +309,128 @@ st.markdown("""
         background-color: var(--card-color) !important;
     }
     
+    /* Comprehensive dataframe fixes */
+    [data-testid="stDataFrame"] table,
+    [data-testid="stDataFrame"] thead,
+    [data-testid="stDataFrame"] tbody,
+    [data-testid="stDataFrame"] tr,
+    [data-testid="stDataFrame"] th,
+    [data-testid="stDataFrame"] td {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    [data-testid="stDataFrame"] th {
+        background-color: var(--border-color) !important;
+    }
+    
+    /* Fix newer Streamlit dataframe components */
+    .stDataFrame [data-testid="stTable"],
+    .stDataFrame [data-testid="stTableContainer"],
+    .stDataFrame .stTable,
+    .stDataFrame .stTableContainer {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Fix any table-related white backgrounds */
+    table, thead, tbody, tr, th, td {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    th {
+        background-color: var(--border-color) !important;
+    }
+    
+    /* Fix Streamlit's table styling */
+    .stTable, .stTable > div, .stTable table {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Fix any remaining table headers */
+    .stTable th, .stTable thead th {
+        background-color: var(--border-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Fix alert and status boxes */
+    .stAlert, .stSuccess, .stInfo, .stWarning, .stError {
+        background-color: var(--card-color) !important;
+        border: 1px solid var(--border-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Fix success message specifically */
+    .stAlert[data-baseweb="notification"] {
+        background-color: var(--card-color) !important;
+        border: 1px solid var(--accent-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Fix all possible white div containers */
+    div[style*="background-color: white"],
+    div[style*="background-color: #ffffff"],
+    div[style*="background-color: #FFFFFF"],
+    div[style*="background-color: rgb(255, 255, 255)"],
+    div[style*="background: white"],
+    div[style*="background: #ffffff"],
+    div[style*="background: #FFFFFF"] {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Force all table elements to use dark theme */
+    * table,
+    * thead,
+    * tbody,
+    * tr,
+    * th,
+    * td {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    * th {
+        background-color: var(--border-color) !important;
+    }
+    
+    /* Fix any remaining container backgrounds */
+    .element-container > div,
+    .stMarkdown > div,
+    .stText > div,
+    [data-testid="element-container"] > div {
+        background-color: transparent !important;
+    }
+    
+    /* But allow specific components to have their intended backgrounds */
+    .month-card, .kpi-card, [class*="card"] {
+        background-color: var(--card-color) !important;
+    }
+    
+    /* Ensure text remains visible */
+    * {
+        color: var(--primary-text) !important;
+    }
+    
+    /* Override any inline styles that might be causing white backgrounds */
+    [style*="background"] {
+        background-color: var(--card-color) !important;
+    }
+    
+    /* Specific fix for success messages and alerts */
+    [data-testid="stAlert"] {
+        background-color: var(--card-color) !important;
+        border: 1px solid var(--accent-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    [data-testid="stAlert"] > div {
+        background-color: transparent !important;
+        color: var(--primary-text) !important;
+    }
+    
     /* Fix metric containers */
     .metric-container {
         background-color: var(--card-color);
