@@ -64,6 +64,30 @@ st.markdown("""
         background-color: var(--border-color);
         color: var(--primary-text);
     }
+    
+    /* Fix all button variants */
+    button[kind="secondary"] {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+        border: 1px solid var(--border-color) !important;
+    }
+    
+    button[kind="secondary"]:hover {
+        background-color: var(--border-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Fix primary buttons */
+    button[kind="primary"] {
+        background-color: var(--accent-color) !important;
+        color: var(--bg-color) !important;
+        border: 1px solid var(--accent-color) !important;
+    }
+    
+    /* Fix all button containers */
+    .row-widget.stButton {
+        background-color: transparent !important;
+    }
 
     /* Headers */
     .main-header {
@@ -232,6 +256,59 @@ st.markdown("""
         color: var(--primary-text);
     }
     
+    /* More specific dataframe selectors */
+    .stDataFrame > div {
+        background-color: var(--card-color) !important;
+    }
+    
+    .stDataFrame [data-testid="metric-container"] {
+        background-color: var(--card-color) !important;
+    }
+    
+    /* Fix AgGrid and other data display components */
+    .ag-theme-streamlit {
+        --ag-background-color: var(--card-color) !important;
+        --ag-foreground-color: var(--primary-text) !important;
+        --ag-header-background-color: var(--border-color) !important;
+        --ag-header-foreground-color: var(--primary-text) !important;
+        --ag-odd-row-background-color: var(--card-color) !important;
+        --ag-even-row-background-color: var(--card-color) !important;
+    }
+    
+    /* Fix all data containers */
+    div[data-testid="stDataFrame"] {
+        background-color: var(--card-color) !important;
+    }
+    
+    div[data-testid="stDataFrame"] > div {
+        background-color: var(--card-color) !important;
+    }
+    
+    /* Fix table elements specifically */
+    .dataframe {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    .dataframe th {
+        background-color: var(--border-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    .dataframe td {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Fix pandas styler */
+    .dataframe tbody tr:nth-child(odd) {
+        background-color: var(--card-color) !important;
+    }
+    
+    .dataframe tbody tr:nth-child(even) {
+        background-color: var(--card-color) !important;
+    }
+    
     /* Fix metric containers */
     .metric-container {
         background-color: var(--card-color);
@@ -254,6 +331,52 @@ st.markdown("""
     /* Fix spinner */
     .stSpinner {
         color: var(--accent-color);
+    }
+    
+    /* Global overrides for any remaining white backgrounds */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-color) var(--card-color);
+    }
+    
+    *::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    *::-webkit-scrollbar-track {
+        background: var(--card-color);
+    }
+    
+    *::-webkit-scrollbar-thumb {
+        background-color: var(--border-color);
+        border-radius: 4px;
+    }
+    
+    /* Force dark theme on all containers */
+    .main, .main > div, .block-container, .element-container {
+        background-color: var(--bg-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Fix any remaining white divs */
+    div:not([class*="month-card"]):not([class*="kpi-card"]) {
+        background-color: transparent !important;
+    }
+    
+    /* Specific fixes for common Streamlit elements */
+    .stMarkdown, .stText, .stCode {
+        background-color: transparent !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Fix column containers */
+    .css-1kyxreq, .css-12oz5g7 {
+        background-color: transparent !important;
+    }
+    
+    /* Fix any white overlays */
+    .stApp > div > div > div {
+        background-color: transparent !important;
     }
     
     /* Responsive design for smaller screens */
