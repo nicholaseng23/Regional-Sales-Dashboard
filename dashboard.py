@@ -405,6 +405,14 @@ class RegionalDashboard:
 
     def load_dashboard_data(self):
         """Loads and processes all data required for the dashboard from Google Sheets."""
+        # Check if we have data in session state (session-based cache)
+        if 'dashboard_data' in st.session_state and 'data_timestamp' in st.session_state:
+            # Check if data is still fresh (less than 30 minutes old)
+            data_age = datetime.now(self.timezone) - st.session_state.data_timestamp
+            if data_age.total_seconds() < 1800:  # 30 minutes
+                st.info("Using session cached data (refreshed automatically every 30 minutes)")
+                return st.session_state.dashboard_data
+        
         try:
             # Try to load data from Google Sheets API
             all_sheets_data = self.sheets_client.get_all_sheets_data()
@@ -417,19 +425,24 @@ class RegionalDashboard:
                     break
             
             if has_real_data:
-                st.write("Debug: Successfully loaded data from Google Sheets API")
+                st.success("✅ Successfully loaded fresh data from Google Sheets API")
                 dashboard_data = self.data_processor.prepare_dashboard_data(all_sheets_data)
                 # Add timestamp to the dashboard data
                 dashboard_data['last_refreshed'] = datetime.now(self.timezone).strftime('%Y-%m-%d %H:%M:%S %Z')
+                
+                # Store in session state for future use
+                st.session_state.dashboard_data = dashboard_data
+                st.session_state.data_timestamp = datetime.now(self.timezone)
+                
                 return dashboard_data
             else:
                 # Fall back to cached data if API calls failed
-                st.warning("API rate limit reached. Using cached data from last successful load.")
+                st.warning("⚠️ API rate limit reached. Using cached data from last successful load.")
                 return self.load_cached_data()
             
         except Exception as e:
             logging.error(f"Error in load_dashboard_data: {e}", exc_info=True)
-            st.warning("Failed to load data from API. Using cached data.")
+            st.warning("⚠️ Failed to load data from API. Using cached data.")
             return self.load_cached_data()
 
     def load_cached_data(self):
@@ -1088,15 +1101,25 @@ class RegionalDashboard:
             with col2:
                 if st.button("🔄 Refresh Data", use_container_width=True, type="secondary"):
                     with st.spinner("Refreshing data..."):
-                        # Clear all cache to force fresh data
+                        # Clear both file-based cache and session cache
                         self.sheets_client.clear_all_cache()
+                        if 'dashboard_data' in st.session_state:
+                            del st.session_state.dashboard_data
+                        if 'data_timestamp' in st.session_state:
+                            del st.session_state.data_timestamp
+                        st.success("✅ Data refreshed successfully!")
                         st.rerun()
             
             with col3:
                 if st.button("🗑️ Clear Cache", use_container_width=True, type="secondary"):
                     with st.spinner("Clearing cache..."):
+                        # Clear both file-based cache and session cache
                         self.sheets_client.clear_all_cache()
-                        st.success("Cache cleared successfully!")
+                        if 'dashboard_data' in st.session_state:
+                            del st.session_state.dashboard_data
+                        if 'data_timestamp' in st.session_state:
+                            del st.session_state.data_timestamp
+                        st.success("✅ Cache cleared successfully!")
                         st.rerun()
 
         tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🌟 VIP", "📊 VIP Monthly", "🎯 Membership", "📈 Membership Monthly", "🔄 Funnel", "⚡ Velocity"])

@@ -27,8 +27,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Cache configuration
-CACHE_DURATION = 3600  # 1 hour cache
-REQUEST_DELAY = 4.0  # 4 seconds between requests to prevent rate limiting
+CACHE_DURATION = 14400  # 4 hours cache (increased from 1 hour)
+REQUEST_DELAY = 6.0  # 6 seconds between requests (increased from 4 seconds)
 MAX_RETRIES = 2  # Reduced to fail faster
 
 class GoogleSheetsClient:
@@ -86,15 +86,16 @@ class GoogleSheetsClient:
         # Ensure minimum delay between requests
         if time_since_last < self.REQUEST_DELAY:
             sleep_time = self.REQUEST_DELAY - time_since_last
+            logger.info(f"⏳ Rate limiting: waiting {sleep_time:.1f} seconds")
             time.sleep(sleep_time)
         
         self.last_api_call_time = time.time()
     
     def exponential_backoff(self, attempt):
         """Implement exponential backoff for rate limiting"""
-        delay = min(3 ** attempt, 120)  # Max 120 seconds (increased from 60)
+        delay = min(3 ** attempt, 180)  # Max 180 seconds (increased from 120)
         time.sleep(delay)
-        logger.info(f"Rate limited, waiting {delay} seconds (attempt {attempt})")
+        logger.warning(f"🔄 Rate limited, waiting {delay} seconds (attempt {attempt + 1})")
     
     def batch_get_all_sheet_data(self, sheet_id, worksheet_name, ranges_dict):
         """
@@ -136,6 +137,7 @@ class GoogleSheetsClient:
                 
                 # Single batch API call for all ranges
                 batch_data = worksheet.batch_get(all_ranges)
+                self.api_call_count += 1
                 
                 # Organize results back into the original structure
                 result = {data_type: [] for data_type in ranges_dict.keys()}
@@ -148,18 +150,21 @@ class GoogleSheetsClient:
                             result[data_type].append([])
                         result[data_type][original_range_idx] = data
                 
-                logger.info(f"Successfully batch fetched data from {worksheet_name}")
+                logger.info(f"✅ Successfully batch fetched data from {worksheet_name} (API calls: {self.api_call_count})")
                 return result
                 
             except gspread.exceptions.APIError as e:
                 if "RATE_LIMIT_EXCEEDED" in str(e) or "429" in str(e):
+                    logger.warning(f"⚠️ API rate limit exceeded for {worksheet_name}")
                     if attempt < max_retries - 1:
                         self.exponential_backoff(attempt)
                         continue
-                logger.error(f"API Error in batch_get_all_sheet_data: {e}")
+                    else:
+                        logger.error(f"❌ Max retries exceeded for {worksheet_name} due to rate limiting")
+                logger.error(f"❌ API Error in batch_get_all_sheet_data: {e}")
                 return {}
             except Exception as e:
-                logger.error(f"Error in batch_get_all_sheet_data: {e}")
+                logger.error(f"❌ Error in batch_get_all_sheet_data: {e}")
                 return {}
         
         return {}
@@ -696,10 +701,13 @@ class GoogleSheetsClient:
                 return {}
             except gspread.exceptions.APIError as e:
                 if "RATE_LIMIT_EXCEEDED" in str(e) or "429" in str(e):
+                    logger.warning(f"⚠️ API rate limit exceeded for {worksheet_name}")
                     if attempt < max_retries - 1:
                         self.exponential_backoff(attempt)
                         continue
-                logger.error(f"API Error in get_sheet_data for {sheet_key}: {e}")
+                    else:
+                        logger.error(f"❌ Max retries exceeded for {worksheet_name} due to rate limiting")
+                logger.error(f"❌ API Error in get_sheet_data for {sheet_key}: {e}")
                 return {}
             except Exception as e:
                 logger.error(f"An unexpected error occurred in get_sheet_data for {sheet_key}: {e}")
