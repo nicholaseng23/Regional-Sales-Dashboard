@@ -52,43 +52,62 @@ st.markdown("""
         background-color: var(--card-color);
     }
     
-    /* Fix button styling */
-    .stButton > button {
-        background-color: var(--card-color);
-        color: var(--primary-text);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
+    /* SIMPLE FIXED BACKGROUND APPROACH */
+    
+    /* Set fixed background on body and main containers */
+    html, body {
+        background-color: var(--bg-color) !important;
+        color: var(--primary-text) !important;
     }
     
-    .stButton > button:hover {
-        background-color: var(--border-color);
-        color: var(--primary-text);
+    /* Force main app container to fixed background */
+    .stApp, .stApp > div, .main, .main > div {
+        background-color: var(--bg-color) !important;
+        color: var(--primary-text) !important;
     }
     
-    /* Fix all button variants */
-    button[kind="secondary"] {
+    /* Fix all block containers */
+    .block-container, .block-container > div {
+        background-color: var(--bg-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Fix element containers */
+    .element-container, .element-container > div {
+        background-color: transparent !important;
+        color: var(--primary-text) !important;
+    }
+    
+    /* Fix all data display components with fixed backgrounds */
+    .stDataFrame, .stDataFrame > div, .stDataFrame table {
         background-color: var(--card-color) !important;
         color: var(--primary-text) !important;
-        border: 1px solid var(--border-color) !important;
     }
     
-    button[kind="secondary"]:hover {
+    /* Fix table elements */
+    table, thead, tbody, tr, td {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    th, thead th {
         background-color: var(--border-color) !important;
         color: var(--primary-text) !important;
     }
     
-    /* Fix primary buttons */
-    button[kind="primary"] {
-        background-color: var(--accent-color) !important;
-        color: var(--bg-color) !important;
+    /* Fix alert/success messages */
+    .stAlert, .stSuccess, .stInfo, .stWarning, .stError {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
         border: 1px solid var(--accent-color) !important;
     }
     
-    /* Fix all button containers */
-    .row-widget.stButton {
-        background-color: transparent !important;
+    /* Our custom cards should keep their styling */
+    .month-card, .kpi-card {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
     }
-
+    
     /* Headers */
     .main-header {
         font-size: 2.25rem;
@@ -113,7 +132,7 @@ st.markdown("""
         padding: 1.5rem;
         border: 1px solid var(--border-color);
         transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-        height: 100%; /* Ensures cards in a row have same height */
+        height: 100%;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
@@ -150,7 +169,7 @@ st.markdown("""
         margin-bottom: 1rem;
         border: 1px solid var(--border-color);
         transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-        height: 100%; /* Fix alignment issue */
+        height: 100%;
     }
     .month-card:hover {
         transform: translateY(-5px);
@@ -190,18 +209,43 @@ st.markdown("""
         border-top: 1px solid var(--border-color);
     }
 
+    /* Button styling */
+    .stButton > button {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 8px;
+    }
+    
+    .stButton > button:hover {
+        background-color: var(--border-color) !important;
+        color: var(--primary-text) !important;
+    }
+    
+    button[kind="secondary"] {
+        background-color: var(--card-color) !important;
+        color: var(--primary-text) !important;
+        border: 1px solid var(--border-color) !important;
+    }
+    
+    button[kind="primary"] {
+        background-color: var(--accent-color) !important;
+        color: var(--bg-color) !important;
+        border: 1px solid var(--accent-color) !important;
+    }
+
     /* Tab Styling */
     .stTabs [data-baseweb="tab-list"] {
         gap: 0.5rem;
         border-bottom: 2px solid var(--border-color);
         flex-wrap: wrap;
         justify-content: flex-start;
-        background-color: var(--bg-color);
+        background-color: var(--bg-color) !important;
     }
     .stTabs [data-baseweb="tab"] {
-        background-color: transparent;
+        background-color: transparent !important;
         border-radius: 8px 8px 0 0;
-        color: var(--secondary-text);
+        color: var(--secondary-text) !important;
         font-weight: 600;
         font-size: 0.875rem;
         padding: 0.5rem 1rem;
@@ -212,370 +256,21 @@ st.markdown("""
         flex: 0 1 auto;
     }
     .stTabs [data-baseweb="tab"]:hover {
-        color: var(--primary-text);
-        background-color: var(--card-color);
+        color: var(--primary-text) !important;
+        background-color: var(--card-color) !important;
     }
     .stTabs [aria-selected="true"] {
-        color: var(--primary-text);
-        background-color: var(--card-color);
-        border-bottom: 2px solid var(--accent-color);
+        color: var(--primary-text) !important;
+        background-color: var(--card-color) !important;
+        border-bottom: 2px solid var(--accent-color) !important;
     }
     
-    /* Tab content area */
     .stTabs [data-baseweb="tab-panel"] {
-        background-color: var(--bg-color);
-        color: var(--primary-text);
-    }
-
-    /* Dataframe styling */
-    .stDataFrame {
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        overflow: hidden;
-        background-color: var(--card-color);
-    }
-    
-    /* Fix dataframe header and cell colors */
-    .stDataFrame [data-testid="stDataFrameResizable"] {
-        background-color: var(--card-color);
-        color: var(--primary-text);
-    }
-    
-    .stDataFrame table {
-        background-color: var(--card-color);
-        color: var(--primary-text);
-    }
-    
-    .stDataFrame th {
-        background-color: var(--border-color);
-        color: var(--primary-text);
-    }
-    
-    .stDataFrame td {
-        background-color: var(--card-color);
-        color: var(--primary-text);
-    }
-    
-    /* More specific dataframe selectors */
-    .stDataFrame > div {
-        background-color: var(--card-color) !important;
-    }
-    
-    .stDataFrame [data-testid="metric-container"] {
-        background-color: var(--card-color) !important;
-    }
-    
-    /* Fix AgGrid and other data display components */
-    .ag-theme-streamlit {
-        --ag-background-color: var(--card-color) !important;
-        --ag-foreground-color: var(--primary-text) !important;
-        --ag-header-background-color: var(--border-color) !important;
-        --ag-header-foreground-color: var(--primary-text) !important;
-        --ag-odd-row-background-color: var(--card-color) !important;
-        --ag-even-row-background-color: var(--card-color) !important;
-    }
-    
-    /* Fix all data containers */
-    div[data-testid="stDataFrame"] {
-        background-color: var(--card-color) !important;
-    }
-    
-    div[data-testid="stDataFrame"] > div {
-        background-color: var(--card-color) !important;
-    }
-    
-    /* Fix table elements specifically */
-    .dataframe {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    .dataframe th {
-        background-color: var(--border-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    .dataframe td {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Fix pandas styler */
-    .dataframe tbody tr:nth-child(odd) {
-        background-color: var(--card-color) !important;
-    }
-    
-    .dataframe tbody tr:nth-child(even) {
-        background-color: var(--card-color) !important;
-    }
-    
-    /* Comprehensive dataframe fixes */
-    [data-testid="stDataFrame"] table,
-    [data-testid="stDataFrame"] thead,
-    [data-testid="stDataFrame"] tbody,
-    [data-testid="stDataFrame"] tr,
-    [data-testid="stDataFrame"] th,
-    [data-testid="stDataFrame"] td {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    [data-testid="stDataFrame"] th {
-        background-color: var(--border-color) !important;
-    }
-    
-    /* Fix newer Streamlit dataframe components */
-    .stDataFrame [data-testid="stTable"],
-    .stDataFrame [data-testid="stTableContainer"],
-    .stDataFrame .stTable,
-    .stDataFrame .stTableContainer {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Fix any table-related white backgrounds */
-    table, thead, tbody, tr, th, td {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    th {
-        background-color: var(--border-color) !important;
-    }
-    
-    /* Fix Streamlit's table styling */
-    .stTable, .stTable > div, .stTable table {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Fix any remaining table headers */
-    .stTable th, .stTable thead th {
-        background-color: var(--border-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Fix alert and status boxes */
-    .stAlert, .stSuccess, .stInfo, .stWarning, .stError {
-        background-color: var(--card-color) !important;
-        border: 1px solid var(--border-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Fix success message specifically */
-    .stAlert[data-baseweb="notification"] {
-        background-color: var(--card-color) !important;
-        border: 1px solid var(--accent-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Fix all possible white div containers */
-    div[style*="background-color: white"],
-    div[style*="background-color: #ffffff"],
-    div[style*="background-color: #FFFFFF"],
-    div[style*="background-color: rgb(255, 255, 255)"],
-    div[style*="background: white"],
-    div[style*="background: #ffffff"],
-    div[style*="background: #FFFFFF"] {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Force all table elements to use dark theme */
-    * table,
-    * thead,
-    * tbody,
-    * tr,
-    * th,
-    * td {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    * th {
-        background-color: var(--border-color) !important;
-    }
-    
-    /* Fix any remaining container backgrounds */
-    .element-container > div,
-    .stMarkdown > div,
-    .stText > div,
-    [data-testid="element-container"] > div {
-        background-color: transparent !important;
-    }
-    
-    /* But allow specific components to have their intended backgrounds */
-    .month-card, .kpi-card, [class*="card"] {
-        background-color: var(--card-color) !important;
-    }
-    
-    /* Ensure text remains visible */
-    * {
-        color: var(--primary-text) !important;
-    }
-    
-    /* Override any inline styles that might be causing white backgrounds */
-    [style*="background"] {
-        background-color: var(--card-color) !important;
-    }
-    
-    /* Additional targeted fixes for remaining white backgrounds */
-    
-    /* Fix Streamlit's newer table components */
-    .stDataFrame [data-testid="stDataFrameContainer"],
-    .stDataFrame [data-testid="dataframe"],
-    .stDataFrame .dataframe-container,
-    .stDataFrame .styledTable {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Fix any remaining table cell backgrounds */
-    .stDataFrame tbody tr,
-    .stDataFrame tbody td,
-    .stDataFrame tbody th {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    .stDataFrame thead tr,
-    .stDataFrame thead td,
-    .stDataFrame thead th {
-        background-color: var(--border-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Fix success/info message backgrounds */
-    .stAlert[data-baseweb="toast"],
-    .stSuccess[data-baseweb="toast"],
-    .stInfo[data-baseweb="toast"],
-    .stWarning[data-baseweb="toast"] {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-        border: 1px solid var(--accent-color) !important;
-    }
-    
-    /* Fix any modal or overlay backgrounds */
-    .stModal, .stOverlay, .stPopover {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Fix input and form backgrounds */
-    .stTextInput > div > div > input,
-    .stSelectbox > div > div > div,
-    .stNumberInput > div > div > input {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-        border: 1px solid var(--border-color) !important;
-    }
-    
-    /* Fix any remaining white containers using CSS Grid/Flexbox */
-    .css-1y4p8pa, .css-12oz5g7, .css-1kyxreq {
-        background-color: transparent !important;
-    }
-    
-    /* Target specific white background divs more precisely */
-    div[style*="background-color: white"],
-    div[style*="background-color: #fff"],
-    div[style*="background-color: #ffffff"],
-    div[style*="background: white"],
-    div[style*="background: #fff"],
-    div[style*="background: #ffffff"] {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Fix any canvas or chart backgrounds */
-    canvas, svg {
-        background-color: transparent !important;
-    }
-    
-    /* Essential CSS restored */
-    
-    /* Fix metric containers */
-    .metric-container {
-        background-color: var(--card-color);
-        color: var(--primary-text);
-    }
-    
-    /* Fix any remaining white backgrounds */
-    .element-container, .stMarkdown, .stText {
-        background-color: transparent;
-        color: var(--primary-text);
-    }
-    
-    /* Fix warning and info boxes */
-    .stAlert {
-        background-color: var(--card-color);
-        border: 1px solid var(--border-color);
-        color: var(--primary-text);
-    }
-    
-    /* Specific fix for success messages and alerts */
-    [data-testid="stAlert"] {
-        background-color: var(--card-color) !important;
-        border: 1px solid var(--accent-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    [data-testid="stAlert"] > div {
-        background-color: transparent !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Fix spinner */
-    .stSpinner {
-        color: var(--accent-color);
-    }
-    
-    /* Scrollbar styling */
-    * {
-        scrollbar-width: thin;
-        scrollbar-color: var(--border-color) var(--card-color);
-    }
-    
-    *::-webkit-scrollbar {
-        width: 8px;
-    }
-    
-    *::-webkit-scrollbar-track {
-        background: var(--card-color);
-    }
-    
-    *::-webkit-scrollbar-thumb {
-        background-color: var(--border-color);
-        border-radius: 4px;
-    }
-    
-    /* Force dark theme on all containers */
-    .main, .main > div, .block-container, .element-container {
         background-color: var(--bg-color) !important;
         color: var(--primary-text) !important;
     }
     
-    /* Fix any remaining white divs (but not our custom cards) */
-    div:not([class*="month-card"]):not([class*="kpi-card"]) {
-        background-color: transparent !important;
-    }
-    
-    /* Specific fixes for common Streamlit elements */
-    .stMarkdown, .stText, .stCode {
-        background-color: transparent !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Fix column containers */
-    .css-1kyxreq, .css-12oz5g7 {
-        background-color: transparent !important;
-    }
-    
-    /* Fix any white overlays */
-    .stApp > div > div > div {
-        background-color: transparent !important;
-    }
-    
-    /* Responsive design for smaller screens */
+    /* Responsive design */
     @media (max-width: 768px) {
         .stTabs [data-baseweb="tab"] {
             font-size: 0.75rem;
@@ -584,154 +279,6 @@ st.markdown("""
         .stTabs [data-baseweb="tab-list"] {
             gap: 0.25rem;
         }
-    }
-    
-    /* AGGRESSIVE WHITE BACKGROUND FIXES */
-    
-    /* Override ALL possible white backgrounds */
-    *[style*="background-color: white"] {
-        background-color: var(--card-color) !important;
-    }
-    
-    *[style*="background-color: #ffffff"] {
-        background-color: var(--card-color) !important;
-    }
-    
-    *[style*="background-color: #FFFFFF"] {
-        background-color: var(--card-color) !important;
-    }
-    
-    *[style*="background-color: rgb(255, 255, 255)"] {
-        background-color: var(--card-color) !important;
-    }
-    
-    *[style*="background: white"] {
-        background-color: var(--card-color) !important;
-    }
-    
-    *[style*="background: #ffffff"] {
-        background-color: var(--card-color) !important;
-    }
-    
-    *[style*="background: #FFFFFF"] {
-        background-color: var(--card-color) !important;
-    }
-    
-    /* Target all possible Streamlit table selectors */
-    .stDataFrame,
-    .stDataFrame *,
-    [data-testid="stDataFrame"],
-    [data-testid="stDataFrame"] *,
-    .dataframe,
-    .dataframe *,
-    table,
-    table *,
-    thead,
-    thead *,
-    tbody,
-    tbody *,
-    tr,
-    tr *,
-    th,
-    th *,
-    td,
-    td * {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Specifically target table headers */
-    th,
-    thead th,
-    .stDataFrame th,
-    [data-testid="stDataFrame"] th {
-        background-color: var(--border-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Target all alert and message components */
-    .stAlert,
-    .stAlert *,
-    .stSuccess,
-    .stSuccess *,
-    .stInfo,
-    .stInfo *,
-    .stWarning,
-    .stWarning *,
-    .stError,
-    .stError *,
-    [data-testid="stAlert"],
-    [data-testid="stAlert"] *,
-    [data-testid="stSuccess"],
-    [data-testid="stSuccess"] *,
-    [data-testid="stInfo"],
-    [data-testid="stInfo"] *,
-    [data-testid="stWarning"],
-    [data-testid="stWarning"] *,
-    [data-testid="stError"],
-    [data-testid="stError"] * {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-        border-color: var(--accent-color) !important;
-    }
-    
-    /* Target all possible div containers */
-    div {
-        background-color: var(--bg-color) !important;
-    }
-    
-    /* But restore our custom cards */
-    .month-card,
-    .month-card *,
-    .kpi-card,
-    .kpi-card * {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Nuclear option: force all elements to use dark colors */
-    * {
-        background-color: var(--bg-color) !important;
-        color: var(--primary-text) !important;
-    }
-    
-    /* Restore specific component backgrounds */
-    .month-card {
-        background-color: var(--card-color) !important;
-    }
-    
-    .kpi-card {
-        background-color: var(--card-color) !important;
-    }
-    
-    .stDataFrame,
-    [data-testid="stDataFrame"],
-    table {
-        background-color: var(--card-color) !important;
-    }
-    
-    /* Ensure buttons remain functional */
-    button,
-    .stButton button {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
-        border: 1px solid var(--border-color) !important;
-    }
-    
-    button:hover,
-    .stButton button:hover {
-        background-color: var(--border-color) !important;
-    }
-    
-    /* Ensure tabs remain functional */
-    .stTabs [data-baseweb="tab"] {
-        background-color: transparent !important;
-        color: var(--secondary-text) !important;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background-color: var(--card-color) !important;
-        color: var(--primary-text) !important;
     }
 </style>
 """, unsafe_allow_html=True)
