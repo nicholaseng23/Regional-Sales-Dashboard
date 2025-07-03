@@ -27,8 +27,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Cache configuration
-CACHE_DURATION = 14400  # 4 hours cache (increased from 1 hour)
-REQUEST_DELAY = 6.0  # 6 seconds between requests (increased from 4 seconds)
+CACHE_DURATION = 21600  # 6 hours cache (increased from 4 hours)
+REQUEST_DELAY = 10.0  # 10 seconds between requests (increased from 6 seconds)
 MAX_RETRIES = 2  # Reduced to fail faster
 
 class GoogleSheetsClient:

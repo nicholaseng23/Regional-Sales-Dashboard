@@ -298,10 +298,10 @@ class RegionalDashboard:
         """Loads and processes all data required for the dashboard from Google Sheets."""
         # Check if we have data in session state (session-based cache)
         if 'dashboard_data' in st.session_state and 'data_timestamp' in st.session_state:
-            # Check if data is still fresh (less than 30 minutes old)
+            # Check if data is still fresh (less than 2 hours old)
             data_age = datetime.now(self.timezone) - st.session_state.data_timestamp
-            if data_age.total_seconds() < 1800:  # 30 minutes
-                st.info("Using session cached data (refreshed automatically every 30 minutes)")
+            if data_age.total_seconds() < 7200:  # 2 hours
+                st.info("Using session cached data (refreshed automatically every 2 hours)")
                 return st.session_state.dashboard_data
         
         try:
