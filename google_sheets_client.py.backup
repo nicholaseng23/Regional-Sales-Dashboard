@@ -655,7 +655,7 @@ class GoogleSheetsClient:
 
                 # Cache the result for 1 hour to reduce API calls
                 cache_key = f"sheet_data_{sheet_id}_{worksheet_name}_{category}"
-                cached_data = self._get_cached_data(cache_key, allow_expired=False)
+                cached_data = self._get_cached_data(cache_key)
                 if cached_data:
                     logger.info(f"Using cached data for {sheet_key}")
                     return cached_data
@@ -690,9 +690,9 @@ class GoogleSheetsClient:
                 except Exception as e:
                     logger.error(f"API Error in get_sheet_data for {sheet_key}: {e}")
                     # Try to get cached data as fallback
-                    cached_data = self._get_cached_data(cache_key, allow_expired=True)
+                    cached_data = self._get_cached_data(cache_key)
                     if cached_data:
-                        logger.info(f"Using cached data (possibly expired) as fallback for {sheet_key}")
+                        logger.info(f"Using cached data as fallback for {sheet_key}")
                         return cached_data
                     return None
 
@@ -747,7 +747,7 @@ class GoogleSheetsClient:
                         
                         # Check cache first
                         cache_key = f"sheet_data_{sheet_id}_{worksheet_name}_{category}"
-                        cached_data = self._get_cached_data(cache_key, allow_expired=False)
+                        cached_data = self._get_cached_data(cache_key)
                         if cached_data:
                             logger.info(f"Using cached data for {sheet_key}")
                             all_data[sheet_key] = {
@@ -847,14 +847,14 @@ class GoogleSheetsClient:
         except Exception as e:
             return False, f"Connection failed: {e}"
 
-    def _get_cached_data(self, cache_key, allow_expired=False):
+    def _get_cached_data(self, cache_key):
         """Get cached data if available and not expired"""
         cache_file = f"cache/{cache_key}.json"
         if os.path.exists(cache_file):
             try:
                 with open(cache_file, 'r') as f:
                     cached = json.load(f)
-                    if allow_expired or time.time() - cached['timestamp'] < CACHE_DURATION:
+                    if time.time() - cached['timestamp'] < CACHE_DURATION:
                         return cached['data']
             except Exception as e:
                 logger.warning(f"Error reading cache file {cache_file}: {e}")

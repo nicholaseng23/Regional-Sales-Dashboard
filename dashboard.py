@@ -338,7 +338,26 @@ class RegionalDashboard:
 
     def load_cached_data(self):
         """Load cached data for when API calls fail."""
-        # Use the cached data you provided
+        # First try to get any cached data from the sheets client
+        try:
+            cached_data = self.sheets_client.get_all_sheets_data()
+            if cached_data:
+                # Check if we got any real data (not just empty structures)
+                has_real_data = False
+                for sheet_key, data in cached_data.items():
+                    if data.get('raw_data') or data.get('monthly_data'):
+                        has_real_data = True
+                        break
+                
+                if has_real_data:
+                    st.info("✅ Using cached data from Google Sheets API")
+                    dashboard_data = self.data_processor.prepare_dashboard_data(cached_data)
+                    dashboard_data['last_refreshed'] = datetime.now(self.timezone).strftime('%Y-%m-%d %H:%M:%S %Z') + " (cached)"
+                    return dashboard_data
+        except Exception as e:
+            logging.error(f"Error loading cached data: {e}")
+        
+        # Fall back to the hardcoded test data
         test_data = {
             "vip_dashboard_my": {
                 "config": {
