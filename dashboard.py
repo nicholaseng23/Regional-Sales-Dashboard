@@ -308,14 +308,32 @@ class RegionalDashboard:
             # Try to load data from Google Sheets API
             all_sheets_data = self.sheets_client.get_all_sheets_data()
             
-            # Check if we got any real data (not just empty structures)
-            has_real_data = False
-            for sheet_key, data in all_sheets_data.items():
-                if data.get('raw_data') or data.get('monthly_data'):
-                    has_real_data = True
-                    break
+            # Check if we got any data at all (not just empty structures)
+            has_any_data = False
+            successful_sheets = 0
+            total_sheets = len(all_sheets_data)
             
-            if has_real_data:
+            logging.info(f"Data loading analysis: {total_sheets} sheets to process")
+            
+            for sheet_key, data in all_sheets_data.items():
+                # Check if this sheet has any actual data (not just empty structures)
+                raw_data = data.get('raw_data', {})
+                monthly_data = data.get('monthly_data', {})
+                weekly_data = data.get('weekly_data', [])
+                
+                # Log details for debugging
+                logging.info(f"Sheet {sheet_key}: raw_data={bool(raw_data)}, monthly_data={bool(monthly_data)}, weekly_data={bool(weekly_data)}")
+                
+                # Consider it successful if it has non-empty data structures
+                if raw_data or monthly_data or weekly_data:
+                    successful_sheets += 1
+                    has_any_data = True
+            
+            logging.info(f"Data loading result: {successful_sheets}/{total_sheets} sheets successful")
+            
+            # Determine the appropriate message based on success rate
+            if successful_sheets == total_sheets and has_any_data:
+                # All sheets loaded successfully with data
                 st.success("✅ Successfully loaded fresh data from Google Sheets API")
                 dashboard_data = self.data_processor.prepare_dashboard_data(all_sheets_data)
                 # Add timestamp to the dashboard data
@@ -326,9 +344,26 @@ class RegionalDashboard:
                 st.session_state.data_timestamp = datetime.now(self.timezone)
                 
                 return dashboard_data
+            elif successful_sheets > 0:
+                # Some sheets loaded successfully
+                st.warning(f"⚠️ Partial data loaded: {successful_sheets}/{total_sheets} sheets successful. Some data may be missing.")
+                dashboard_data = self.data_processor.prepare_dashboard_data(all_sheets_data)
+                dashboard_data['last_refreshed'] = datetime.now(self.timezone).strftime('%Y-%m-%d %H:%M:%S %Z') + " (partial)"
+                
+                # Store in session state for future use
+                st.session_state.dashboard_data = dashboard_data
+                st.session_state.data_timestamp = datetime.now(self.timezone)
+                
+                return dashboard_data
             else:
-                # Fall back to cached data if API calls failed
-                st.warning("⚠️ API rate limit reached. Using cached data from last successful load.")
+                # No sheets loaded successfully - check what type of error occurred
+                error_info = self.sheets_client.get_last_error_info()
+                if error_info['is_rate_limit']:
+                    st.warning("⚠️ API rate limit reached. Using cached data from last successful load.")
+                elif error_info['error_type']:
+                    st.warning(f"⚠️ API error occurred: {error_info['error_type']}. Using cached data from last successful load.")
+                else:
+                    st.warning("⚠️ Unable to load fresh data from Google Sheets API. Using cached data from last successful load.")
                 return self.load_cached_data()
             
         except Exception as e:
@@ -352,7 +387,7 @@ class RegionalDashboard:
                 if has_real_data:
                     st.info("✅ Using cached data from Google Sheets API")
                     dashboard_data = self.data_processor.prepare_dashboard_data(cached_data)
-                    dashboard_data['last_refreshed'] = datetime.now(self.timezone).strftime('%Y-%m-%d %H:%M:%S %Z') + " (cached)"
+                    dashboard_data['last_refreshed'] = datetime.now(self.timezone).strftime('%Y-%m-%d %H:%M:%S %Z')
                     return dashboard_data
         except Exception as e:
             logging.error(f"Error loading cached data: {e}")

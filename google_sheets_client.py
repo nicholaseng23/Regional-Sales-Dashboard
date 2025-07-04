@@ -37,6 +37,8 @@ class GoogleSheetsClient:
         self.api_call_count = 0
         self.last_api_call_time = 0
         self.REQUEST_DELAY = REQUEST_DELAY  # Store as instance variable
+        self.last_error_type = None  # Track the type of last error
+        self.last_error_message = None  # Track the last error message
         self.initialize_client()
     
     def initialize_client(self):
@@ -153,15 +155,19 @@ class GoogleSheetsClient:
                 
             except gspread.exceptions.APIError as e:
                 if "RATE_LIMIT_EXCEEDED" in str(e) or "429" in str(e):
+                    self._record_error('RATE_LIMIT', str(e))
                     logger.warning(f"⚠️ API rate limit exceeded for {worksheet_name}")
                     if attempt < max_retries - 1:
                         self.exponential_backoff(attempt)
                         continue
                     else:
                         logger.error(f"❌ Max retries exceeded for {worksheet_name} due to rate limiting")
+                else:
+                    self._record_error('API_ERROR', str(e))
                 logger.error(f"❌ API Error in batch_get_all_sheet_data: {e}")
                 return {}
             except Exception as e:
+                self._record_error('GENERAL_ERROR', str(e))
                 logger.error(f"❌ Error in batch_get_all_sheet_data: {e}")
                 return {}
         
@@ -733,15 +739,19 @@ class GoogleSheetsClient:
                 return {}
             except gspread.exceptions.APIError as e:
                 if "RATE_LIMIT_EXCEEDED" in str(e) or "429" in str(e):
+                    self._record_error('RATE_LIMIT', str(e))
                     logger.warning(f"⚠️ API rate limit exceeded for {worksheet_name}")
                     if attempt < max_retries - 1:
                         self.exponential_backoff(attempt)
                         continue
                     else:
                         logger.error(f"❌ Max retries exceeded for {worksheet_name} due to rate limiting")
+                else:
+                    self._record_error('API_ERROR', str(e))
                 logger.error(f"❌ API Error in get_sheet_data for {sheet_key}: {e}")
                 return {}
             except Exception as e:
+                self._record_error('GENERAL_ERROR', str(e))
                 logger.error(f"An unexpected error occurred in get_sheet_data for {sheet_key}: {e}")
                 return {}
         
@@ -752,6 +762,9 @@ class GoogleSheetsClient:
         Optimized method to get data from all configured sheets using batch operations.
         This dramatically reduces API calls by batching requests per sheet.
         """
+        # Clear any previous errors
+        self._clear_errors()
+        
         all_data = {}
         
         # Group sheets by their sheet_id to minimize API calls
@@ -1098,4 +1111,23 @@ class GoogleSheetsClient:
             }
             
         except Exception as e:
-            return {'error': str(e)} 
+            return {'error': str(e)}
+
+    def _record_error(self, error_type, error_message):
+        """Record the last error for debugging purposes"""
+        self.last_error_type = error_type
+        self.last_error_message = error_message
+        logger.error(f"Recorded error - Type: {error_type}, Message: {error_message}")
+    
+    def _clear_errors(self):
+        """Clear recorded errors"""
+        self.last_error_type = None
+        self.last_error_message = None
+    
+    def get_last_error_info(self):
+        """Get information about the last error"""
+        return {
+            'error_type': self.last_error_type,
+            'error_message': self.last_error_message,
+            'is_rate_limit': self.last_error_type == 'RATE_LIMIT'
+        } 
