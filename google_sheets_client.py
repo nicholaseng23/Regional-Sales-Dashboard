@@ -205,10 +205,37 @@ class GoogleSheetsClient:
         Fetches header row and all month data in a single API call.
         """
         try:
-            # Get all possible month columns (assume up to 24 months of data)
-            # This covers a wide range to ensure we get all data in one call
+            # First, get the sheet dimensions to avoid "exceeds grid limits" error
+            try:
+                # Get basic sheet info to determine max columns
+                sheet_info = worksheet.spreadsheet.get()
+                sheet_props = None
+                for sheet in sheet_info['sheets']:
+                    if sheet['properties']['title'] == worksheet.title:
+                        sheet_props = sheet['properties']['gridProperties']
+                        break
+                
+                if sheet_props:
+                    max_columns = sheet_props.get('columnCount', 26)  # Default to 26 if not found
+                    max_rows = sheet_props.get('rowCount', 1000)
+                    logger.info(f"Sheet {worksheet.title} dimensions: {max_rows} rows x {max_columns} columns")
+                else:
+                    max_columns = 26  # Safe default
+                    logger.warning(f"Could not determine sheet dimensions for {worksheet.title}, using default")
+            except Exception as e:
+                logger.warning(f"Error getting sheet dimensions: {e}, using safe default")
+                max_columns = 26  # Safe default
+            
+            # Calculate safe column range - month data starts from column C (index 2)
+            # Start from column C (2) and go up to the max available columns
+            start_col = 2  # Column C - where month data actually starts
+            end_col = min(start_col + 20, max_columns - 1)  # Up to 20 months or max columns
+            
+            logger.info(f"Requesting VIP data from columns {start_col} to {end_col} (max available: {max_columns})")
+            
+            # Get month columns within safe range
             month_ranges = []
-            for col_idx in range(22, 46):  # Columns V to AT (covers 24 months)
+            for col_idx in range(start_col, end_col + 1):
                 col_letter = self._index_to_column_letter(col_idx)
                 month_ranges.extend([
                     f"{col_letter}1",   # header
@@ -247,12 +274,12 @@ class GoogleSheetsClient:
                         if match:
                             year, month = match.groups()
                             month_name = datetime(int(f"20{year}"), int(month), 1).strftime("%B %Y")
-                            col_letter = self._index_to_column_letter(22 + (i // 4))
+                            col_letter = self._index_to_column_letter(start_col + (i // 4))
                             
                             # Extract data values
-                            total_deals = self._extract_cell_value([all_data[i + 1]])
-                            onsite_vip = self._extract_cell_value([all_data[i + 2]])
-                            remote_vip = self._extract_cell_value([all_data[i + 3]])
+                            total_deals = self._extract_cell_value(all_data[i + 1])
+                            onsite_vip = self._extract_cell_value(all_data[i + 2])
+                            remote_vip = self._extract_cell_value(all_data[i + 3])
                             
                             if total_deals > 0:  # Only include months with data
                                 monthly_data[month_name] = {
@@ -287,10 +314,37 @@ class GoogleSheetsClient:
         Fetches header row and all month data in a single API call.
         """
         try:
-            # Get all possible month columns (assume up to 24 months of data)
-            # This covers a wide range to ensure we get all data in one call
+            # First, get the sheet dimensions to avoid "exceeds grid limits" error
+            try:
+                # Get basic sheet info to determine max columns
+                sheet_info = worksheet.spreadsheet.get()
+                sheet_props = None
+                for sheet in sheet_info['sheets']:
+                    if sheet['properties']['title'] == worksheet.title:
+                        sheet_props = sheet['properties']['gridProperties']
+                        break
+                
+                if sheet_props:
+                    max_columns = sheet_props.get('columnCount', 26)  # Default to 26 if not found
+                    max_rows = sheet_props.get('rowCount', 1000)
+                    logger.info(f"Sheet {worksheet.title} dimensions: {max_rows} rows x {max_columns} columns")
+                else:
+                    max_columns = 26  # Safe default
+                    logger.warning(f"Could not determine sheet dimensions for {worksheet.title}, using default")
+            except Exception as e:
+                logger.warning(f"Error getting sheet dimensions: {e}, using safe default")
+                max_columns = 26  # Safe default
+            
+            # Calculate safe column range - month data starts from column C (index 2)
+            # Start from column C (2) and go up to the max available columns
+            start_col = 2  # Column C - where month data actually starts
+            end_col = min(start_col + 20, max_columns - 1)  # Up to 20 months or max columns
+            
+            logger.info(f"Requesting membership data from columns {start_col} to {end_col} (max available: {max_columns})")
+            
+            # Get month columns within safe range
             month_ranges = []
-            for col_idx in range(22, 46):  # Columns V to AT (covers 24 months)
+            for col_idx in range(start_col, end_col + 1):
                 col_letter = self._index_to_column_letter(col_idx)
                 month_ranges.extend([
                     f"{col_letter}1",   # header
@@ -333,12 +387,12 @@ class GoogleSheetsClient:
                         if match:
                             year, month = match.groups()
                             month_name = datetime(int(f"20{year}"), int(month), 1).strftime("%B %Y")
-                            col_letter = self._index_to_column_letter(22 + (i // 4))
+                            col_letter = self._index_to_column_letter(start_col + (i // 4))
                             
                             # Extract data values
-                            total_deals = self._extract_cell_value([all_data[i + 1]])
-                            membership_1 = self._extract_cell_value([all_data[i + 2]])
-                            membership_2 = self._extract_cell_value([all_data[i + 3]])
+                            total_deals = self._extract_cell_value(all_data[i + 1])
+                            membership_1 = self._extract_cell_value(all_data[i + 2])
+                            membership_2 = self._extract_cell_value(all_data[i + 3])
                             
                             if total_deals > 0:  # Only include months with data
                                 monthly_data[month_name] = {
