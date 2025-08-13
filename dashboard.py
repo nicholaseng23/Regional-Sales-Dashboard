@@ -792,55 +792,55 @@ class RegionalDashboard:
             st.warning("No Sales Velocity data available.")
             return
 
-        # --- Latest Month Summary (using latest week data) ---
+        # --- Latest Week Summary (using latest metrics from raw_data) ---
         st.markdown('<div class="section-header">Sales Velocity (Latest Week)</div>', unsafe_allow_html=True)
+        
+        # Get latest metrics from raw_data (row 2)
+        latest_metrics_data = velocity_data.get('regional', {}).get('raw_data', {})
         weekly_data = velocity_data.get('regional', {}).get('weekly_data', [])
         
-        if not weekly_data:
-            st.info("No weekly velocity data available.")
+        if not latest_metrics_data:
+            st.info("No latest velocity metrics available.")
         else:
-            # Get the latest week data (first item in the list since it's sorted by date)
-            latest_week = weekly_data[0]
-            
-            # Create metrics from the latest week data with updated structure
+            # Create metrics from the latest data (row 2)
             latest_metrics = {
                 'lead_to_sql': {
-                    'value': latest_week.get('lead_to_sql', 0),
+                    'value': latest_metrics_data.get('lead_to_sql', 0),
                     'format': '{:.1f}',
                     'description': 'Lead to SQL (days)'
                 },
                 'lead_to_ms': {
-                    'value': latest_week.get('lead_to_ms', 0),
+                    'value': latest_metrics_data.get('lead_to_ms', 0),
                     'format': '{:.1f}',
                     'description': 'Lead to MS (days)'
                 },
                 'ms_to_1st_meeting': {
-                    'value': latest_week.get('ms_to_1st_meeting', 0),
+                    'value': latest_metrics_data.get('ms_to_1st_meeting', 0),
                     'format': '{:.1f}',
                     'description': 'MS to 1st Meeting (days)'
                 },
                 'ms_to_mc': {
-                    'value': latest_week.get('ms_to_mc', 0),
+                    'value': latest_metrics_data.get('ms_to_mc', 0),
                     'format': '{:.1f}',
                     'description': 'MS to MC (days)'
                 },
                 'mc_to_won': {
-                    'value': latest_week.get('mc_to_won', 0),
+                    'value': latest_metrics_data.get('mc_to_won', 0),
                     'format': '{:.1f}',
                     'description': 'MC to Won (days)'
                 },
                 'mc_to_lost': {
-                    'value': latest_week.get('mc_to_lost', 0),
+                    'value': latest_metrics_data.get('mc_to_lost', 0),
                     'format': '{:.1f}',
                     'description': 'MC to Lost (days)'
                 },
                 'lead_to_won': {
-                    'value': latest_week.get('lead_to_won', 0),
+                    'value': latest_metrics_data.get('lead_to_won', 0),
                     'format': '{:.1f}',
                     'description': 'Lead to Won (days)'
                 },
                 'lead_to_lost': {
-                    'value': latest_week.get('lead_to_lost', 0),
+                    'value': latest_metrics_data.get('lead_to_lost', 0),
                     'format': '{:.1f}',
                     'description': 'Lead to Lost (days)'
                 }

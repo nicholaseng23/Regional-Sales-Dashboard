@@ -505,9 +505,9 @@ class GoogleSheetsClient:
         Optimized velocity data processing using batch operations.
         Fetches all velocity data in a single API call.
         
-        Updated for new sheet structure:
-        - Week Start Date (single date) starting from row 25 upward
-        - New column mappings and additional metrics
+        Updated structure:
+        - Latest Week: Always use row 2 for current metrics
+        - Past Data: Use rows 25+ but only include dates from 03/03/2025 onwards
         """
         try:
             logger.info(f"Batch processing velocity data from worksheet: {worksheet.title}")
@@ -516,21 +516,45 @@ class GoogleSheetsClient:
             batch_result = self.batch_get_all_sheet_data(
                 worksheet.spreadsheet.id, 
                 worksheet.title, 
-                {'all_data': 'A1:Z50'}  # Fetch more rows to ensure we get all data
+                {'all_data': 'A1:Z100'}  # Fetch more rows to ensure we get all data
             )
             
             all_data = batch_result.get('all_data', [])
-            if not all_data:
-                logger.warning("No velocity data found in worksheet")
+            if not all_data or len(all_data) < 25:
+                logger.warning("No velocity data found in worksheet or insufficient rows")
                 return {'raw_data': {}, 'weekly_data': []}
             
             all_values = [row if isinstance(row, list) else [row] for row in all_data]
             
-            # Find data starting from row 25 (index 24) and going upward
+            # Get latest metrics from row 2 (index 1)
+            latest_metrics = {}
+            if len(all_values) > 1:
+                row_2 = all_values[1]  # Row 2 (index 1)
+                if len(row_2) > 13:  # Ensure we have enough columns
+                    latest_metrics = {
+                        'lead_to_sql': self._safe_extract_float(row_2, 3),      # Column D
+                        'lead_to_ms': self._safe_extract_float(row_2, 4),       # Column E  
+                        'ms_to_1st_meeting': self._safe_extract_float(row_2, 5), # Column F
+                        'ms_to_mc': self._safe_extract_float(row_2, 6),         # Column G
+                        'mc_to_won': self._safe_extract_float(row_2, 9),        # Column J
+                        'mc_to_lost': self._safe_extract_float(row_2, 10),      # Column K
+                        'lead_to_won': self._safe_extract_float(row_2, 12),     # Column M
+                        'lead_to_lost': self._safe_extract_float(row_2, 13)     # Column N
+                    }
+                    # Add week start date from row 2 if available
+                    week_start_date = str(row_2[0]).strip() if len(row_2) > 0 and row_2[0] else "Current Week"
+                    latest_metrics['week_start_date'] = week_start_date
+                    logger.info(f"Latest metrics from row 2: {latest_metrics}")
+            
+            # Get historical data starting from row 25 (index 24) and filter by date
             weekly_data = []
             velocity_metrics = []
             
-            # Start from row 25 (index 24) and work backwards to collect all data
+            # Define cutoff date (03/03/2025)
+            from datetime import datetime
+            cutoff_date = datetime(2025, 3, 3)
+            
+            # Start from row 25 (index 24) and work through all available rows
             for row_idx in range(24, len(all_values)):  # Start from row 25 (index 24)
                 row = all_values[row_idx]
                 
@@ -540,6 +564,29 @@ class GoogleSheetsClient:
                     
                     # Skip if it's a header or empty
                     if not week_start_date or 'week' in week_start_date.lower() or 'date' in week_start_date.lower():
+                        continue
+                    
+                    # Parse the date and check if it's >= 03/03/2025
+                    try:
+                        # Try different date formats (DD/MM/YYYY)
+                        try:
+                            date_obj = datetime.strptime(week_start_date, '%d/%m/%Y')
+                        except ValueError:
+                            try:
+                                date_obj = datetime.strptime(week_start_date, '%m/%d/%Y')
+                            except ValueError:
+                                try:
+                                    date_obj = datetime.strptime(week_start_date, '%Y-%m-%d')
+                                except ValueError:
+                                    logger.warning(f"Could not parse date: {week_start_date}")
+                                    continue
+                        
+                        # Only include dates from 03/03/2025 onwards
+                        if date_obj < cutoff_date:
+                            continue
+                            
+                    except Exception as e:
+                        logger.warning(f"Error parsing date {week_start_date}: {e}")
                         continue
                     
                     # Extract velocity metrics from the updated column positions
@@ -557,17 +604,16 @@ class GoogleSheetsClient:
                         'lead_to_lost': self._safe_extract_float(row, 13)     # Column N - Lead_to_Lost
                     }
                     
-                    # Only include rows that have at least some data
-                    if any(value > 0 for value in metrics.values()):
-                        week_data.update(metrics)
-                        weekly_data.append(week_data)
-                        velocity_metrics.append(metrics)
-                        logger.debug(f"Added velocity data for week: {week_start_date}")
+                    # Include this row (don't filter by having data since zeros are valid)
+                    week_data.update(metrics)
+                    weekly_data.append(week_data)
+                    velocity_metrics.append(metrics)
+                    logger.debug(f"Added velocity data for week: {week_start_date}")
             
-            # Sort by date (newest first) - assuming dates are in a sortable format
-            weekly_data.sort(key=lambda x: x['week_start_date'], reverse=True)
+            # Sort by date (newest first)
+            weekly_data.sort(key=lambda x: datetime.strptime(x['week_start_date'], '%d/%m/%Y'), reverse=True)
             
-            # Calculate averages for the updated metrics
+            # Calculate averages for the updated metrics (only from historical data, not latest)
             averages = {}
             if velocity_metrics:
                 for metric in ['lead_to_sql', 'lead_to_ms', 'ms_to_1st_meeting', 
@@ -575,10 +621,21 @@ class GoogleSheetsClient:
                     values = [m[metric] for m in velocity_metrics if m[metric] > 0]
                     averages[f"{metric}_avg"] = sum(values) / len(values) if values else 0
             
-            logger.info(f"Batch processed velocity data: {len(weekly_data)} weeks with updated structure")
+            # If we have latest_metrics, add them to weekly_data as the first item
+            if latest_metrics:
+                # Add latest metrics as the first item in weekly_data if it's not already there
+                latest_week_data = {k: v for k, v in latest_metrics.items()}
+                # Check if this exact date is already in weekly_data
+                existing_dates = [item['week_start_date'] for item in weekly_data]
+                if latest_metrics['week_start_date'] not in existing_dates:
+                    weekly_data.insert(0, latest_week_data)
+            
+            logger.info(f"Batch processed velocity data: {len(weekly_data)} weeks with updated structure, filtered from 03/03/2025")
+            logger.info(f"Latest metrics from row 2: {bool(latest_metrics)}")
+            
             return {
-                'raw_data': averages,
-                'weekly_data': weekly_data
+                'raw_data': latest_metrics,  # Use latest metrics from row 2 for KPIs
+                'weekly_data': weekly_data   # Historical data for table
             }
             
         except Exception as e:
