@@ -504,101 +504,85 @@ class GoogleSheetsClient:
         """
         Optimized velocity data processing using batch operations.
         Fetches all velocity data in a single API call.
+        
+        Updated for new sheet structure:
+        - Week Start Date (single date) starting from row 25 upward
+        - New column mappings and additional metrics
         """
         try:
-            # Use batch operation to get all data instead of get_all_values()
-            # This ensures proper rate limiting
-            ranges_dict = {'all_data': [f'A1:Z1000']}  # Get a large range to cover all data
+            logger.info(f"Batch processing velocity data from worksheet: {worksheet.title}")
             
+            # Get all data from the worksheet in a single batch call
             batch_result = self.batch_get_all_sheet_data(
                 worksheet.spreadsheet.id, 
                 worksheet.title, 
-                ranges_dict
+                {'all_data': 'A1:Z50'}  # Fetch more rows to ensure we get all data
             )
             
-            if not batch_result or 'all_data' not in batch_result:
-                logger.warning("No data found in Sales Velocity worksheet")
+            all_data = batch_result.get('all_data', [])
+            if not all_data:
+                logger.warning("No velocity data found in worksheet")
                 return {'raw_data': {}, 'weekly_data': []}
             
-            # Extract all values from batch result
-            all_values = batch_result['all_data'][0] if batch_result['all_data'] else []
+            all_values = [row if isinstance(row, list) else [row] for row in all_data]
             
-            if not all_values:
-                logger.warning("No data found in Sales Velocity worksheet")
-                return {'raw_data': {}, 'weekly_data': []}
-            
-            logger.info(f"Sales Velocity sheet has {len(all_values)} rows")
-            
-            # Find weekly cohort rows
-            weekly_cohorts = []
-            
-            # Look for rows that contain date ranges like "28/04/2025 - 04/05/2025"
-            for row_idx, row in enumerate(all_values):
-                for col_idx, cell in enumerate(row):
-                    cell_str = str(cell).strip()
-                    if ' - ' in cell_str and ('2025' in cell_str or '2024' in cell_str):
-                        # Check if this is a weekly cohort row starting from 28/04/2025
-                        if '28/04/2025' in cell_str or any(month in cell_str for month in 
-                                                         ['05/2025', '06/2025', '07/2025', '08/2025', 
-                                                          '09/2025', '10/2025', '11/2025', '12/2025']):
-                            weekly_cohorts.append({
-                                'row_idx': row_idx,
-                                'date_range': cell_str,
-                                'col_idx': col_idx
-                            })
-                            logger.info(f"Found weekly cohort: {cell_str} at row {row_idx}, col {col_idx}")
-            
-            if not weekly_cohorts:
-                logger.warning("No weekly cohorts found starting from 28/04/2025")
-                return {'raw_data': {}, 'weekly_data': []}
-            
-            # Extract data for each weekly cohort
+            # Find data starting from row 25 (index 24) and going upward
             weekly_data = []
             velocity_metrics = []
             
-            for cohort in weekly_cohorts:
-                row_idx = cohort['row_idx']
-                date_range = cohort['date_range']
+            # Start from row 25 (index 24) and work backwards to collect all data
+            for row_idx in range(24, len(all_values)):  # Start from row 25 (index 24)
+                row = all_values[row_idx]
                 
-                # Look for the data row (usually the next row after the cohort header)
-                data_row_idx = row_idx + 1
-                if data_row_idx < len(all_values):
-                    data_row = all_values[data_row_idx]
+                # Check if this row has a date in column A (Week Start Date)
+                if len(row) > 0 and row[0]:
+                    week_start_date = str(row[0]).strip()
                     
-                    week_data = {'week_range': date_range}
+                    # Skip if it's a header or empty
+                    if not week_start_date or 'week' in week_start_date.lower() or 'date' in week_start_date.lower():
+                        continue
                     
-                    # Extract velocity metrics from specific columns
+                    # Extract velocity metrics from the updated column positions
+                    week_data = {'week_start_date': week_start_date}
+                    
+                    # Updated column mappings based on your specifications
                     metrics = {
-                        'lead_to_sql': self._safe_extract_float(data_row, 3),      # Column D
-                        'lead_to_ms': self._safe_extract_float(data_row, 4),       # Column E
-                        'ms_to_1st_meeting': self._safe_extract_float(data_row, 5), # Column F
-                        'ms_to_mc': self._safe_extract_float(data_row, 6),         # Column G
-                        'mc_to_closed': self._safe_extract_float(data_row, 7),     # Column H
-                        'lead_to_win': self._safe_extract_float(data_row, 8)       # Column I
+                        'lead_to_sql': self._safe_extract_float(row, 3),      # Column D - Lead_to_SQL
+                        'lead_to_ms': self._safe_extract_float(row, 4),       # Column E - Lead_to_MS
+                        'ms_to_1st_meeting': self._safe_extract_float(row, 5), # Column F - MS_to_1stMeeting
+                        'ms_to_mc': self._safe_extract_float(row, 6),         # Column G - MS_to_MC
+                        'mc_to_won': self._safe_extract_float(row, 9),        # Column J - MC_to_Won
+                        'mc_to_lost': self._safe_extract_float(row, 10),      # Column K - MC_to_Lost
+                        'lead_to_won': self._safe_extract_float(row, 12),     # Column M - Lead_to_Won
+                        'lead_to_lost': self._safe_extract_float(row, 13)     # Column N - Lead_to_Lost
                     }
                     
-                    week_data.update(metrics)
-                    weekly_data.append(week_data)
-                    
-                    # Collect metrics for averaging
-                    velocity_metrics.append(metrics)
+                    # Only include rows that have at least some data
+                    if any(value > 0 for value in metrics.values()):
+                        week_data.update(metrics)
+                        weekly_data.append(week_data)
+                        velocity_metrics.append(metrics)
+                        logger.debug(f"Added velocity data for week: {week_start_date}")
             
-            # Calculate averages
+            # Sort by date (newest first) - assuming dates are in a sortable format
+            weekly_data.sort(key=lambda x: x['week_start_date'], reverse=True)
+            
+            # Calculate averages for the updated metrics
             averages = {}
             if velocity_metrics:
                 for metric in ['lead_to_sql', 'lead_to_ms', 'ms_to_1st_meeting', 
-                              'ms_to_mc', 'mc_to_closed', 'lead_to_win']:
+                              'ms_to_mc', 'mc_to_won', 'mc_to_lost', 'lead_to_won', 'lead_to_lost']:
                     values = [m[metric] for m in velocity_metrics if m[metric] > 0]
                     averages[f"{metric}_avg"] = sum(values) / len(values) if values else 0
             
-            logger.info(f"Batch processed velocity data: {len(weekly_data)} weeks")
+            logger.info(f"Batch processed velocity data: {len(weekly_data)} weeks with updated structure")
             return {
                 'raw_data': averages,
                 'weekly_data': weekly_data
             }
             
         except Exception as e:
-            logger.error(f"Error in process_velocity_data_batch: {e}")
+            logger.error(f"Error in batch velocity processing: {e}", exc_info=True)
             return {'raw_data': {}, 'weekly_data': []}
     
     def _extract_cell_value(self, cell_data):

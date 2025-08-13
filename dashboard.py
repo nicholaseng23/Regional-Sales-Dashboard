@@ -793,7 +793,7 @@ class RegionalDashboard:
             return
 
         # --- Latest Month Summary (using latest week data) ---
-        st.markdown('<div class="section-header">Sales Velocity (Latest Month)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header">Sales Velocity (Latest Week)</div>', unsafe_allow_html=True)
         weekly_data = velocity_data.get('regional', {}).get('weekly_data', [])
         
         if not weekly_data:
@@ -802,7 +802,7 @@ class RegionalDashboard:
             # Get the latest week data (first item in the list since it's sorted by date)
             latest_week = weekly_data[0]
             
-            # Create metrics from the latest week data
+            # Create metrics from the latest week data with updated structure
             latest_metrics = {
                 'lead_to_sql': {
                     'value': latest_week.get('lead_to_sql', 0),
@@ -824,27 +824,99 @@ class RegionalDashboard:
                     'format': '{:.1f}',
                     'description': 'MS to MC (days)'
                 },
-                'mc_to_closed': {
-                    'value': latest_week.get('mc_to_closed', 0),
+                'mc_to_won': {
+                    'value': latest_week.get('mc_to_won', 0),
                     'format': '{:.1f}',
-                    'description': 'MC to Closed (days)'
+                    'description': 'MC to Won (days)'
                 },
-                'lead_to_win': {
-                    'value': latest_week.get('lead_to_win', 0),
+                'mc_to_lost': {
+                    'value': latest_week.get('mc_to_lost', 0),
                     'format': '{:.1f}',
-                    'description': 'Lead to Win (days)'
+                    'description': 'MC to Lost (days)'
+                },
+                'lead_to_won': {
+                    'value': latest_week.get('lead_to_won', 0),
+                    'format': '{:.1f}',
+                    'description': 'Lead to Won (days)'
+                },
+                'lead_to_lost': {
+                    'value': latest_week.get('lead_to_lost', 0),
+                    'format': '{:.1f}',
+                    'description': 'Lead to Lost (days)'
                 }
             }
             
-            kpi_cols = st.columns(len(latest_metrics))
-            for i, (key, data) in enumerate(latest_metrics.items()):
-                with kpi_cols[i]:
-                    st.markdown(f"""
-                    <div class="kpi-card">
-                        <div class="kpi-title">{data.get('description', key)}</div>
-                        <div class="kpi-value">{data['format'].format(data['value'])}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+            # Display in two rows for better layout (4 metrics per row)
+            st.markdown("**Latest Week Performance:**")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            # First row - Lead metrics
+            with col1:
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-title">{latest_metrics['lead_to_sql']['description']}</div>
+                    <div class="kpi-value">{latest_metrics['lead_to_sql']['format'].format(latest_metrics['lead_to_sql']['value'])}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-title">{latest_metrics['lead_to_ms']['description']}</div>
+                    <div class="kpi-value">{latest_metrics['lead_to_ms']['format'].format(latest_metrics['lead_to_ms']['value'])}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-title">{latest_metrics['ms_to_1st_meeting']['description']}</div>
+                    <div class="kpi-value">{latest_metrics['ms_to_1st_meeting']['format'].format(latest_metrics['ms_to_1st_meeting']['value'])}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col4:
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-title">{latest_metrics['ms_to_mc']['description']}</div>
+                    <div class="kpi-value">{latest_metrics['ms_to_mc']['format'].format(latest_metrics['ms_to_mc']['value'])}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Second row - Outcome metrics
+            col5, col6, col7, col8 = st.columns(4)
+            
+            with col5:
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-title">{latest_metrics['mc_to_won']['description']}</div>
+                    <div class="kpi-value">{latest_metrics['mc_to_won']['format'].format(latest_metrics['mc_to_won']['value'])}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col6:
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-title">{latest_metrics['mc_to_lost']['description']}</div>
+                    <div class="kpi-value">{latest_metrics['mc_to_lost']['format'].format(latest_metrics['mc_to_lost']['value'])}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col7:
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-title">{latest_metrics['lead_to_won']['description']}</div>
+                    <div class="kpi-value">{latest_metrics['lead_to_won']['format'].format(latest_metrics['lead_to_won']['value'])}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col8:
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-title">{latest_metrics['lead_to_lost']['description']}</div>
+                    <div class="kpi-value">{latest_metrics['lead_to_lost']['format'].format(latest_metrics['lead_to_lost']['value'])}</div>
+                </div>
+                """, unsafe_allow_html=True)
         
         # --- Past Data Table ---
         st.markdown('<div class="section-header">Sales Velocity Past Data</div>', unsafe_allow_html=True)
@@ -854,15 +926,17 @@ class RegionalDashboard:
             return
             
         df = pd.DataFrame(weekly_data)
-        # Reorder and format columns for display
+        # Reorder and format columns for display with updated structure
         display_cols = {
-            'week_range': 'Week Range',
+            'week_start_date': 'Week Start Date',
             'lead_to_sql': 'Lead to SQL (days)',
             'lead_to_ms': 'Lead to MS (days)',
             'ms_to_1st_meeting': 'MS to 1st Meeting (days)',
             'ms_to_mc': 'MS to MC (days)',
-            'mc_to_closed': 'MC to Closed (days)',
-            'lead_to_win': 'Lead to Win (days)'
+            'mc_to_won': 'MC to Won (days)',
+            'mc_to_lost': 'MC to Lost (days)',
+            'lead_to_won': 'Lead to Won (days)',
+            'lead_to_lost': 'Lead to Lost (days)'
         }
         
         # Filter df to only include columns we want to display and in the correct order
@@ -870,7 +944,7 @@ class RegionalDashboard:
         
         # Format the numeric columns
         for col in display_cols.keys():
-            if col != 'week_range' and col in df_display.columns:
+            if col != 'week_start_date' and col in df_display.columns:
                 df_display[col] = df_display[col].apply(lambda x: f"{x:.1f}")
 
         df_display = df_display.rename(columns=display_cols)

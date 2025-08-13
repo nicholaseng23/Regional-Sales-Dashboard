@@ -232,7 +232,7 @@ METRICS_CONFIG = {
         'description': 'Total Leads',
         'category': 'funnel'
     },
-    # Sales Velocity Metrics - Updated for weekly structure
+    # Sales Velocity Metrics - Updated for new sheet structure with additional metrics
     'lead_to_sql_avg': {
         'formula': 'lead_to_sql_avg',
         'format': '{:.1f} days',
@@ -257,16 +257,28 @@ METRICS_CONFIG = {
         'description': 'MS to MC (Avg)',
         'category': 'velocity'
     },
-    'mc_to_closed_avg': {
-        'formula': 'mc_to_closed_avg',
+    'mc_to_won_avg': {
+        'formula': 'mc_to_won_avg',
         'format': '{:.1f} days',
-        'description': 'MC to Closed (Avg)',
+        'description': 'MC to Won (Avg)',
         'category': 'velocity'
     },
-    'lead_to_win_avg': {
-        'formula': 'lead_to_win_avg',
+    'mc_to_lost_avg': {
+        'formula': 'mc_to_lost_avg',
         'format': '{:.1f} days',
-        'description': 'Lead to Win (Avg)',
+        'description': 'MC to Lost (Avg)',
+        'category': 'velocity'
+    },
+    'lead_to_won_avg': {
+        'formula': 'lead_to_won_avg',
+        'format': '{:.1f} days',
+        'description': 'Lead to Won (Avg)',
+        'category': 'velocity'
+    },
+    'lead_to_lost_avg': {
+        'formula': 'lead_to_lost_avg',
+        'format': '{:.1f} days',
+        'description': 'Lead to Lost (Avg)',
         'category': 'velocity'
     },
     # Membership Metrics
