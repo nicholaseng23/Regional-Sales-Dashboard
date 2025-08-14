@@ -72,9 +72,9 @@ GOOGLE_SHEETS_CONFIG = {
                 'remote_vip': 'V30'
             }
         },
-        # Sales Velocity Sheets - Updated with correct worksheet names
+        # Sales Velocity Sheets - Updated with copied sheet ID
         'sales_velocity_my': {
-            'id': '1_KWf7wxtDUyypGsWXzsmCXhLOG8fmN0EapDXoKu_3EE',
+            'id': '1xk6QE2Boa1JagETfIGKyLYLYvK7KcNLnTKoTLTySmag',
             'name': 'Malaysia Sales Velocity',
             'worksheet_name': 'MY Velocity',  # Correct worksheet name
             'category': 'velocity',
@@ -85,7 +85,7 @@ GOOGLE_SHEETS_CONFIG = {
             }
         },
         'sales_velocity_ph': {
-            'id': '1_KWf7wxtDUyypGsWXzsmCXhLOG8fmN0EapDXoKu_3EE',
+            'id': '1xk6QE2Boa1JagETfIGKyLYLYvK7KcNLnTKoTLTySmag',
             'name': 'Philippines Sales Velocity',
             'worksheet_name': 'PH Velocity',  # Correct worksheet name
             'category': 'velocity',
@@ -94,7 +94,7 @@ GOOGLE_SHEETS_CONFIG = {
             }
         },
         'sales_velocity_th': {
-            'id': '1_KWf7wxtDUyypGsWXzsmCXhLOG8fmN0EapDXoKu_3EE',
+            'id': '1xk6QE2Boa1JagETfIGKyLYLYvK7KcNLnTKoTLTySmag',
             'name': 'Thailand Sales Velocity',
             'worksheet_name': 'TH Velocity',  # Correct worksheet name
             'category': 'velocity',
