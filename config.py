@@ -72,15 +72,33 @@ GOOGLE_SHEETS_CONFIG = {
                 'remote_vip': 'V30'
             }
         },
-        # Sales Velocity Sheet (Malaysia only for now) - Weekly data structure
+        # Sales Velocity Sheets - Updated with correct worksheet names
         'sales_velocity_my': {
             'id': '1_KWf7wxtDUyypGsWXzsmCXhLOG8fmN0EapDXoKu_3EE',
             'name': 'Malaysia Sales Velocity',
-            'worksheet_name': None,  # Use default sheet
+            'worksheet_name': 'MY Velocity',  # Correct worksheet name
             'category': 'velocity',
             'ranges': {
                 # These will be handled by the weekly data parser
-                # The actual data structure will be weekly ranges starting from 28/04/2025
+                # The actual data structure will be weekly ranges starting from row 25
+                'weekly_data': 'A:Z'  # Full range for weekly parsing
+            }
+        },
+        'sales_velocity_ph': {
+            'id': '1_KWf7wxtDUyypGsWXzsmCXhLOG8fmN0EapDXoKu_3EE',
+            'name': 'Philippines Sales Velocity',
+            'worksheet_name': 'PH Velocity',  # Correct worksheet name
+            'category': 'velocity',
+            'ranges': {
+                'weekly_data': 'A:Z'  # Full range for weekly parsing
+            }
+        },
+        'sales_velocity_th': {
+            'id': '1_KWf7wxtDUyypGsWXzsmCXhLOG8fmN0EapDXoKu_3EE',
+            'name': 'Thailand Sales Velocity',
+            'worksheet_name': 'TH Velocity',  # Correct worksheet name
+            'category': 'velocity',
+            'ranges': {
                 'weekly_data': 'A:Z'  # Full range for weekly parsing
             }
         },
