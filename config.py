@@ -72,22 +72,20 @@ GOOGLE_SHEETS_CONFIG = {
                 'remote_vip': 'V30'
             }
         },
-        # Sales Velocity Sheets - Updated with copied sheet ID
+        # Sales Velocity Sheets - Using separate velocity sheet (as intended)
         'sales_velocity_my': {
             'id': '1xk6QE2Boa1JagETfIGKyLYLYvK7KcNLnTKoTLTySmag',
             'name': 'Malaysia Sales Velocity',
-            'worksheet_name': 'MY Velocity',  # Correct worksheet name
+            'worksheet_name': 'MY Velocity',
             'category': 'velocity',
             'ranges': {
-                # These will be handled by the weekly data parser
-                # The actual data structure will be weekly ranges starting from row 25
                 'weekly_data': 'A:Z'  # Full range for weekly parsing
             }
         },
         'sales_velocity_ph': {
             'id': '1xk6QE2Boa1JagETfIGKyLYLYvK7KcNLnTKoTLTySmag',
             'name': 'Philippines Sales Velocity',
-            'worksheet_name': 'PH Velocity',  # Correct worksheet name
+            'worksheet_name': 'PH Velocity',
             'category': 'velocity',
             'ranges': {
                 'weekly_data': 'A:Z'  # Full range for weekly parsing
@@ -96,7 +94,7 @@ GOOGLE_SHEETS_CONFIG = {
         'sales_velocity_th': {
             'id': '1xk6QE2Boa1JagETfIGKyLYLYvK7KcNLnTKoTLTySmag',
             'name': 'Thailand Sales Velocity',
-            'worksheet_name': 'TH Velocity',  # Correct worksheet name
+            'worksheet_name': 'TH Velocity',
             'category': 'velocity',
             'ranges': {
                 'weekly_data': 'A:Z'  # Full range for weekly parsing
