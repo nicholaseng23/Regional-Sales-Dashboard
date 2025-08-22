@@ -516,15 +516,22 @@ class GoogleSheetsClient:
             batch_result = self.batch_get_all_sheet_data(
                 worksheet.spreadsheet.id, 
                 worksheet.title, 
-                {'all_data': 'A1:Z100'}  # Fetch more rows to ensure we get all data
+                {'all_data': ['A1:Z100']}  # Fixed: ranges must be lists, not strings
             )
             
             all_data = batch_result.get('all_data', [])
-            if not all_data or len(all_data) < 25:
+            if not all_data or len(all_data) < 1:
                 logger.warning("No velocity data found in worksheet or insufficient rows")
                 return {'raw_data': {}, 'weekly_data': []}
             
-            all_values = [row if isinstance(row, list) else [row] for row in all_data]
+            # Get the first (and only) range result
+            all_values = all_data[0] if all_data else []
+            if not all_values or len(all_values) < 25:
+                logger.warning("No velocity data found in worksheet or insufficient rows")
+                return {'raw_data': {}, 'weekly_data': []}
+            
+            # Ensure all rows are lists
+            all_values = [row if isinstance(row, list) else [row] for row in all_values]
             
             # Get latest metrics from row 2 (index 1)
             latest_metrics = {}
