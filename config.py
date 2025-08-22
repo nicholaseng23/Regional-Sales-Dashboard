@@ -74,31 +74,25 @@ GOOGLE_SHEETS_CONFIG = {
         },
         # Sales Velocity Sheets - Using separate velocity sheet (as intended)
         'sales_velocity_my': {
-            'id': '1xk6QE2Boa1JagETfIGKyLYLYvK7KcNLnTKoTLTySmag',
+            'id': '1jRJYtACCtdA6aI9u7oKDYzT-52xYqwDeIwuLJbH-o4Y',
             'name': 'Malaysia Sales Velocity',
             'worksheet_name': 'MY Velocity',
             'category': 'velocity',
-            'ranges': {
-                'weekly_data': 'A:Z'  # Full range for weekly parsing
-            }
+            'ranges': {'weekly_data': 'A:Z'}
         },
         'sales_velocity_ph': {
-            'id': '1xk6QE2Boa1JagETfIGKyLYLYvK7KcNLnTKoTLTySmag',
+            'id': '1jRJYtACCtdA6aI9u7oKDYzT-52xYqwDeIwuLJbH-o4Y',
             'name': 'Philippines Sales Velocity',
             'worksheet_name': 'PH Velocity',
             'category': 'velocity',
-            'ranges': {
-                'weekly_data': 'A:Z'  # Full range for weekly parsing
-            }
+            'ranges': {'weekly_data': 'A:Z'}
         },
         'sales_velocity_th': {
-            'id': '1xk6QE2Boa1JagETfIGKyLYLYvK7KcNLnTKoTLTySmag',
+            'id': '1jRJYtACCtdA6aI9u7oKDYzT-52xYqwDeIwuLJbH-o4Y',
             'name': 'Thailand Sales Velocity',
             'worksheet_name': 'TH Velocity',
             'category': 'velocity',
-            'ranges': {
-                'weekly_data': 'A:Z'  # Full range for weekly parsing
-            }
+            'ranges': {'weekly_data': 'A:Z'}
         },
         # Sales Funnel Sheets
         'sales_funnel_my': {
